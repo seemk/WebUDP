@@ -1,0 +1,17 @@
+#pragma once
+
+#include <stdint.h>
+#include <stddef.h>
+
+// http://xoroshiro.di.unimi.it/xoroshiro128plus.c
+struct WuRngState {
+  uint64_t s[2];
+};
+
+uint64_t WuGetRngSeed();
+void WuRngInit(WuRngState* state, uint64_t seed);
+uint64_t WuRngNext(WuRngState* state);
+uint64_t WuRandomU64();
+uint32_t WuRandomU32();
+
+void WuRandomString(char* out, size_t length);
