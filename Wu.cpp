@@ -230,22 +230,23 @@ void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
                      std::min(iceFields.password.length,
                               kMaxStunIdentifierLength));
 
-              std::string body = GenerateSDP(
-                  wu->cert->fingerprint, wu->conf->host, wu->conf->port,
-                  (char*)client->serverUser.identifier,
+              int bodyLength = 0;
+              const char* body = GenerateSDP(
+                  &wu->arena, wu->cert->fingerprint, wu->conf->host,
+                  wu->conf->port, (char*)client->serverUser.identifier,
                   client->serverUser.length,
                   (char*)client->serverPassword.identifier,
-                  client->serverPassword.length, &iceFields);
+                  client->serverPassword.length, &iceFields, &bodyLength);
 
               char response[4096];
               int responseLength = snprintf(response, 4096,
                                             "HTTP/1.1 200 OK\r\n"
                                             "Content-Type: application/json\r\n"
-                                            "Content-Length: %zu\r\n"
+                                            "Content-Length: %d\r\n"
                                             "Connection: close\r\n"
                                             "Access-Control-Allow-Origin: *\r\n"
                                             "\r\n%s",
-                                            body.length(), body.c_str());
+                                            bodyLength, body);
               SocketWrite(conn->fd, response, responseLength);
             } else {
               SocketWrite(conn->fd, STRLIT(HTTP_UNAVAILABLE));
@@ -646,7 +647,7 @@ int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
 }
 
 int32_t WuInit(WuHost* wu, const WuConf* conf) {
-  WuArenaInit(&wu->arena, 1 << 19);
+  WuArenaInit(&wu->arena, 1 << 20);
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
 

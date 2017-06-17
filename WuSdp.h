@@ -1,7 +1,8 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
-#include <string>
+
+struct WuArena;
 
 struct IceField {
   const char* value;
@@ -16,6 +17,8 @@ struct ICESdpFields {
 
 bool ParseSdp(const char* sdp, size_t len, ICESdpFields* fields);
 
-std::string GenerateSDP(const char* certFingerprint, const char* serverIp, const char* serverPort,
+const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
+                        const char* serverIp, const char* serverPort,
                         const char* ufrag, int32_t ufragLen, const char* pass,
-                        int32_t passLen, const ICESdpFields* remote);
+                        int32_t passLen, const ICESdpFields* remote,
+                        int* outLength);
