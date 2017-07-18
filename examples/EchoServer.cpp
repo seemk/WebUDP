@@ -32,6 +32,7 @@ int main(int argc, char** argv) {
         }
         case WuEvent_ClientLeave: {
           printf("EchoServer: client leave\n");
+          WuRemoveClient(&wu, evt.client);
           break;
         }
         case WuEvent_TextData: {

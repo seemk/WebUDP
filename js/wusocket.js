@@ -25,8 +25,7 @@ WuSocket.prototype.beginConnection = function() {
 
   this.peer.onicecandidate = function(evt) {
     if (evt.candidate) {
-      console.log("received ice candidate");
-      console.log(evt);
+      console.log("received ice candidate", evt.candidate);
     } else {
       console.log("all local candidates received");
     }
@@ -70,14 +69,13 @@ WuSocket.prototype.beginConnection = function() {
   peer.createOffer().then(function(offer) {
     return peer.setLocalDescription(offer);
   }).then(function() {
-    $.ajax({
-      "type": "POST",
-      url: socket.address,
-      data: peer.localDescription.sdp,
-      success: function(response) {
-        console.log(JSON.stringify(response));
+    let request = new XMLHttpRequest();
+    request.open("POST", socket.address);
+    request.onload = function() {
+      if (request.status == 200) {
+        let response = JSON.parse(request.responseText);
         peer.setRemoteDescription(new RTCSessionDescription(response.answer)).then(function() {
-          var candidate = new RTCIceCandidate(response.candidate);
+          let candidate = new RTCIceCandidate(response.candidate);
           peer.addIceCandidate(candidate).then(function() {
             console.log("add ice candidate success");
           }).catch(function(err) {
@@ -85,12 +83,11 @@ WuSocket.prototype.beginConnection = function() {
           });
         })
         .catch(function(e) {
-          console.log("set remote description fail");
-          console.log(e);
+          console.log("set remote description fail", e);
         });
-      },
-      dataType: "json"
-    });
+      }
+    };
+    request.send(peer.localDescription.sdp);
   }).catch(function(reason) {
     console.log("create offer fail " + reason);
   });

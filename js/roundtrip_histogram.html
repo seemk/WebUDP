@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebUDP</title>
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+  <script src="wusocket.js"></script>
+</head>
+<script>
+// uses examples/EchoServer.cpp
+function Start() {
+  let PORT = 9555;
+  let NUM_PACKETS = 2000;
+  let SEND_INTERVAL = 10;
+
+  let canvas = document.getElementById("canvas");
+  let ctx = canvas.getContext("2d");
+  let D = 10.0;
+  let W = canvas.width / D;
+  let currentTrip = 0;
+  let intervalId;
+  let packets = {};
+  let histogram = {};
+
+  let chart = Highcharts.chart("container", {
+    chart: { type: "column" },
+    title: { text: "Packet roundtrip time histogram" },
+    xAxis: {
+      gridLineWidth: 1,
+      title: { text: "ms" }
+    },
+    yAxis: [{
+      title: { text: "num packets" }
+    }, {
+      opposite: true,
+      title: { text: "Count" }
+    }],
+    series: [{
+      name: "RTT",
+      type: "column",
+      data: [],
+      pointPadding: 0,
+      groupPadding: 0,
+      pointPlacement: "between"
+    }]
+  });
+
+  window.sock = new WuSocket(window.location.protocol + "//" + window.location.hostname + ":" + PORT);
+  sock.onopen = function() {
+    ctx.fillStyle = "#D15159";
+    for (let i = 0; i < NUM_PACKETS; i++) {
+      let x = i % W;
+      let y = (i / W) | 0;
+      ctx.fillRect(x * D, y * D, D, D);
+    }
+    ctx.fillStyle = "#59b122";
+    intervalId = setInterval(function() {
+      let payload = "payload-" + currentTrip;
+      packets[payload] = { begin: performance.now() };
+      sock.send(payload);
+      currentTrip++;
+      if (currentTrip >= NUM_PACKETS) {
+        clearInterval(intervalId);
+      }
+    }, SEND_INTERVAL);
+
+    setTimeout(function() {
+      let keys = Object.keys(packets);
+
+      let max = 0;
+      let min = Infinity;
+      let avg = 0;
+      let completed = 0;
+      for (let i = 0; i < keys.length; i++) {
+        let p = packets[keys[i]];
+
+        if (p.end) {
+          completed += 1;
+          let time = p.end - p.begin;
+          if (time > max) max = time;
+          if (time < min) min = time;
+        }
+      }
+
+      console.log("max=" + max.toFixed(2) + " ms");
+      console.log("min=" + min.toFixed(2) + " ms");
+      console.log("completed=" + (completed / NUM_PACKETS * 100.0) + "%");
+    }, NUM_PACKETS * SEND_INTERVAL + 5000);
+  };
+
+  sock.onmessage = function(evt) {
+    let data = evt.data;
+    if (typeof(data) == "string") {
+      let p = packets[data];
+      if (p) {
+        if (!p.hasOwnProperty("end")) {
+          packets[data]["end"] = performance.now(); 
+          let time = packets[data].end - packets[data].begin;
+          let step = 5.0;
+          let bucket = Math.floor(time / step) * step;
+          if (histogram[bucket] === undefined) {
+            histogram[bucket] = 1;
+          } else {
+            histogram[bucket] += 1;
+          }
+
+          let idx = data.split("-")[1] | 0;
+          let x = idx % W;
+          let y = (idx / W) | 0;
+          ctx.fillRect(x * D, y * D, D, D);
+        }
+        let histData = [];
+
+        let histKeys = Object.keys(histogram);
+        for (let i = 0; i < histKeys.length; i++) {
+          let slot = histKeys[i];
+          histData.push([parseFloat(slot), histogram[slot]]);
+        }
+
+        histData.sort(function(a, b) { return a[0] - b[0]; });
+        chart.series[0].setData(histData);
+      }
+    }
+  };
+}
+
+(function() {
+  if (document.readyState != "loading") {
+    Start();
+  } else {
+    document.addEventListener("DOMContentLoaded", Start);
+  }
+})();
+</script>
+<body>
+  <div>
+    <div id="container"></div>
+    <canvas style="margin: 10px 0 0 0;background:#121212;" width="1000" height="200" id="canvas">
+    </canvas>
+  </div>
+</body>
+</html>
