@@ -2,13 +2,13 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "WuArena.h"
-#include "WuQueue.h"
 
 struct WuClient;
 struct WuConnectionBufferPool;
 struct WuPool;
 struct WuCert;
+struct WuArena;
+struct WuQueue;
 struct ssl_ctx_st;
 
 enum WuEventType {
@@ -35,14 +35,14 @@ struct WuConf {
 };
 
 struct WuHost {
-  WuArena arena;
+  WuArena* arena;
   double time;
   double dt;
   uint16_t port;
   int tcpfd;
   int udpfd;
   int epfd;
-  WuQueue pendingEvents;
+  WuQueue* pendingEvents;
   WuConnectionBufferPool* bufferPool;
   int32_t maxEvents;
   struct epoll_event* events;

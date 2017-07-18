@@ -1,19 +1,8 @@
-project(WebRTCServer)
+project(WebUdp)
 cmake_minimum_required(VERSION 3.5)
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_C_STANDARD 11)
-
-option(WU_BUILD_TESTS "Build tests" OFF)
-
-add_definitions(-Wall -Werror)
-
-include_directories(
-  ${OPENSSL_INCLUDE_DIR}  
-)
 
 add_library(Wu
   CRC32.cpp
@@ -29,60 +18,51 @@ add_library(Wu
   WuStun.cpp
   WuCrypto.cpp
   WuRng.cpp
-  WuQueue.c
+  WuQueue.cpp
   picohttpparser.c
 )
 
+target_include_directories(Wu
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
+  PRIVATE OpenSSL::SSL
+)
+
+target_link_libraries(Wu
+  PRIVATE OpenSSL::SSL
+  PRIVATE Threads::Threads
+)
+
+target_compile_options(Wu
+  PRIVATE
+  -Wall
+)
+
+install(TARGETS Wu EXPORT WuTargets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+  PUBLIC_HEADER DESTINATION include
+)
+
+install(FILES Wu.h DESTINATION include)
+
+install(EXPORT WuTargets
+  FILE WuTargets.cmake
+  NAMESPACE Wu::
+  DESTINATION lib/cmake/Wu
+)
+
 add_executable(EchoServer examples/EchoServer.cpp)
+target_link_libraries(EchoServer Wu)
 
-set(WU_LIBRARIES
-  Wu
-  ${OPENSSL_LIBRARIES}
-  ${CMAKE_THREAD_LIBS_INIT}
-  PARENT_SCOPE
+set_target_properties(Wu PROPERTIES
+  PUBLIC_HEADER Wu.h
+  CXX_STANDARD 11
 )
 
-set(WU_LIBRARIES
-  Wu
-  ${OPENSSL_LIBRARIES}
-  ${CMAKE_THREAD_LIBS_INIT}
+set_target_properties(EchoServer PROPERTIES
+  CXX_STANDARD 11
 )
-
-target_link_libraries(EchoServer ${WU_LIBRARIES})
-
-if (WU_BUILD_TESTS)
-  add_executable(sdp_test
-    sdp_test.cpp
-    WuSdp.cpp
-    WuRng.cpp
-  )
-
-  add_executable(crc_test
-    crc_test.cpp
-    CRC32.cpp
-  )
-
-  add_executable(FuzzSdp
-    test/fuzz/FuzzSdp.cpp
-    WuSdp.cpp
-    WuRng.cpp
-  )
-
-  add_executable(FuzzStun
-    test/fuzz/FuzzStun.cpp
-    WuStun.cpp
-    WuString.cpp
-    WuCrypto.cpp
-    CRC32.cpp
-  )
-
-  add_executable(FuzzSctp
-    test/fuzz/FuzzSctp.cpp
-    WuSctp.cpp
-    CRC32.cpp
-  )
-
-  target_link_libraries(FuzzStun
-    ${OPENSSL_LIBRARIES}
-  )
-endif()

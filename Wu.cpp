@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <vector>
+#include "WuArena.h"
 #include "WuCert.h"
 #include "WuCert.h"
 #include "WuClock.h"
@@ -22,6 +23,7 @@
 #include "WuHttp.h"
 #include "WuNetwork.h"
 #include "WuPool.h"
+#include "WuQueue.h"
 #include "WuRng.h"
 #include "WuSctp.h"
 #include "WuSdp.h"
@@ -170,7 +172,7 @@ WuClient* WuHostNewClient(WuHost* wu) {
 }
 
 void WuHostPushEvent(WuHost* wu, WuEvent evt) {
-  WuQueuePush(&wu->pendingEvents, &evt);
+  WuQueuePush(wu->pendingEvents, &evt);
 }
 
 void WuSendSctpShutdown(WuHost* wu, WuClient* client) {
@@ -271,7 +273,7 @@ void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
 
               int bodyLength = 0;
               const char* body = GenerateSDP(
-                  &wu->arena, wu->cert->fingerprint, wu->conf->host,
+                  wu->arena, wu->cert->fingerprint, wu->conf->host,
                   wu->conf->port, (char*)client->serverUser.identifier,
                   client->serverUser.length,
                   (char*)client->serverPassword.identifier,
@@ -566,7 +568,7 @@ void WuHostReceiveDTLSPacket(WuHost* wu, uint8_t* data, size_t length,
       int bytes = SSL_read(client->ssl, receiveBuffer, sizeof(receiveBuffer));
 
       if (bytes > 0) {
-        uint8_t* buf = (uint8_t*)WuArenaAcquire(&wu->arena, bytes);
+        uint8_t* buf = (uint8_t*)WuArenaAcquire(wu->arena, bytes);
         memcpy(buf, receiveBuffer, bytes);
         WuHostHandleSctp(wu, client, buf, bytes);
       }
@@ -670,7 +672,8 @@ int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
 }
 
 int32_t WuInit(WuHost* wu, const WuConf* conf) {
-  WuArenaInit(&wu->arena, 1 << 20);
+  wu->arena = (WuArena*)calloc(1, sizeof(WuArena)); 
+  WuArenaInit(wu->arena, 1 << 20);
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
 
@@ -715,7 +718,7 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
 
   const int32_t maxEvents = 128;
 
-  WuQueueInit(&wu->pendingEvents, sizeof(WuEvent), 1024);
+  wu->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
   wu->bufferPool = new WuConnectionBufferPool(maxEvents + 2);
 
   WuConnectionBuffer* udpBuf = wu->bufferPool->GetBuffer();
@@ -789,12 +792,12 @@ void WuHostUpdateClients(WuHost* wu) {
 }
 
 int32_t WuServe(WuHost* wu, WuEvent* evt) {
-  if (WuQueuePop(&wu->pendingEvents, evt)) {
+  if (WuQueuePop(wu->pendingEvents, evt)) {
     return 1;
   }
 
   WuHostUpdateClients(wu);
-  WuArenaReset(&wu->arena);
+  WuArenaReset(wu->arena);
   int n = epoll_wait(wu->epfd, wu->events, wu->maxEvents, 0);
 
   WuConnectionBufferPool* pool = wu->bufferPool;
@@ -860,7 +863,7 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
     }
   }
 
-  if (WuQueuePop(&wu->pendingEvents, evt)) {
+  if (WuQueuePop(wu->pendingEvents, evt)) {
     return 1;
   }
 
