@@ -1,58 +1,15 @@
 #pragma once
 
-#include <openssl/ssl.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/socket.h>
-#include <string>
-#include <vector>
 #include "WuArena.h"
-#include "WuCert.h"
-#include "WuHttp.h"
-#include "WuPool.h"
 #include "WuQueue.h"
 
 struct WuClient;
-
-struct WuConf {
-  const char* host;
-  const char* port;
-};
-
-const size_t kCertFingerprintLength = 95;
-
-struct WuConnectionBuffer {
-  size_t size = 0;
-  int fd = -1;
-  uint8_t requestBuffer[kMaxHttpRequestLength];
-};
-
-struct WuConnectionBufferPool {
-  WuConnectionBufferPool(size_t n) : buffers(n) {
-    for (size_t i = 0; i < n; i++) {
-      freeBuffers.push_back(&buffers[i]);
-    }
-  }
-
-  WuConnectionBuffer* GetBuffer() {
-    if (freeBuffers.size() > 0) {
-      WuConnectionBuffer* buf = freeBuffers.back();
-      freeBuffers.pop_back();
-      return buf;
-    }
-
-    return nullptr;
-  }
-
-  void Reclaim(WuConnectionBuffer* buf) {
-    buf->fd = -1;
-    buf->size = 0;
-    freeBuffers.push_back(buf);
-  }
-
-  std::vector<WuConnectionBuffer> buffers;
-  std::vector<WuConnectionBuffer*> freeBuffers;
-};
+struct WuConnectionBufferPool;
+struct WuPool;
+struct WuCert;
+struct ssl_ctx_st;
 
 enum WuEventType {
   WuEvent_BinaryData,
@@ -70,6 +27,11 @@ struct WuEvent {
       int32_t length;
     } data;
   } as;
+};
+
+struct WuConf {
+  const char* host;
+  const char* port;
 };
 
 struct WuHost {
@@ -91,7 +53,7 @@ struct WuHost {
   WuClient** clients;
   WuCert* cert;
 
-  SSL_CTX* sslCtx;
+  ssl_ctx_st* sslCtx;
 
   const WuConf* conf;
 };

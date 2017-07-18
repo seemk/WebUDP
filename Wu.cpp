@@ -5,17 +5,23 @@
 #include <netinet/tcp.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <algorithm>
+#include <vector>
+#include "WuCert.h"
 #include "WuCert.h"
 #include "WuClock.h"
 #include "WuDataChannel.h"
+#include "WuHttp.h"
 #include "WuNetwork.h"
+#include "WuPool.h"
 #include "WuRng.h"
 #include "WuSctp.h"
 #include "WuSdp.h"
@@ -46,6 +52,39 @@ const char* WuClientStateString(WuClientState state) {
       return "client-state-invalid";
   }
 }
+
+struct WuConnectionBuffer {
+  size_t size = 0;
+  int fd = -1;
+  uint8_t requestBuffer[kMaxHttpRequestLength];
+};
+
+struct WuConnectionBufferPool {
+  WuConnectionBufferPool(size_t n) : buffers(n) {
+    for (size_t i = 0; i < n; i++) {
+      freeBuffers.push_back(&buffers[i]);
+    }
+  }
+
+  WuConnectionBuffer* GetBuffer() {
+    if (freeBuffers.size() > 0) {
+      WuConnectionBuffer* buf = freeBuffers.back();
+      freeBuffers.pop_back();
+      return buf;
+    }
+
+    return nullptr;
+  }
+
+  void Reclaim(WuConnectionBuffer* buf) {
+    buf->fd = -1;
+    buf->size = 0;
+    freeBuffers.push_back(buf);
+  }
+
+  std::vector<WuConnectionBuffer> buffers;
+  std::vector<WuConnectionBuffer*> freeBuffers;
+};
 
 const double kMaxClientTtl = 8.0;
 const double heartbeatInterval = 4.0;
