@@ -58,11 +58,6 @@ install(EXPORT WuTargets
 add_executable(EchoServer examples/EchoServer.cpp)
 target_link_libraries(EchoServer Wu)
 
-set_target_properties(Wu PROPERTIES
-  PUBLIC_HEADER Wu.h
-  CXX_STANDARD 11
-)
-
-set_target_properties(EchoServer PROPERTIES
+set_target_properties(Wu EchoServer PROPERTIES
   CXX_STANDARD 11
 )
