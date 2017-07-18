@@ -23,10 +23,11 @@
 #include "picohttpparser.h"
 
 enum WuClientState {
-  WuClient_Dead = 0,
-  WuClient_WaitingRemoval = 1,
-  WuClient_Pending = 2,
-  WuClient_Connected = 3
+  WuClient_Dead,
+  WuClient_WaitingRemoval,
+  WuClient_DTLSHandshake,
+  WuClient_SCTPEstablished,
+  WuClient_DataChannelOpen
 };
 
 const char* WuClientStateString(WuClientState state) {
@@ -35,12 +36,14 @@ const char* WuClientStateString(WuClientState state) {
       return "client-state-dead";
     case WuClient_WaitingRemoval:
       return "client-state-waitremove";
-    case WuClient_Pending:
-      return "client-state-pending";
-    case WuClient_Connected:
-      return "client-state-connected";
+    case WuClient_DTLSHandshake:
+      return "client-state-dtls-handshake";
+    case WuClient_SCTPEstablished:
+      return "client-state-sctp-established";
+    case WuClient_DataChannelOpen:
+      return "client-state-datachannel-open";
     default:
-      return "client-state-unknown";
+      return "client-state-invalid";
   }
 }
 
@@ -59,7 +62,6 @@ struct WuClient {
   uint32_t sctpVerificationTag = 0;
   uint32_t remoteTsn = 0;
   uint32_t tsn = 1;
-  int32_t joinEvtPushed = 0;
   double ttl = kMaxClientTtl;
   double nextHeartbeat = heartbeatInterval;
 
@@ -78,7 +80,6 @@ void SslInfoCallback(const SSL* ssl, int where, int ret) {
   (void)where;
   (void)ret;
   (void)ssl;
-  // printf("SSL info - %s\n", SSL_state_string_long(ssl));
 }
 
 void WuClientFinish(WuClient* client) {
@@ -90,7 +91,7 @@ void WuClientFinish(WuClient* client) {
 }
 
 void WuClientStart(const WuHost* wu, WuClient* client) {
-  client->state = WuClient_Pending;
+  client->state = WuClient_DTLSHandshake;
   client->remoteSctpPort = 0;
   client->sctpVerificationTag = 0;
   client->remoteTsn = 0;
@@ -146,7 +147,6 @@ void WuSendSctpShutdown(WuHost* wu, WuClient* client) {
   rc.as.shutdown.cumulativeTsnAck = client->remoteTsn;
 
   WuSendSctp(wu, client, &response, &rc, 1);
-  printf("sending shutdown to client: %p\n", client);
 }
 
 void WuRemoveClient(WuHost* wu, WuClient* client) {
@@ -263,7 +263,6 @@ void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
 
       return;
     } else if (parseStatus == -1) {
-      printf("HTTP parse error\n");
       close(conn->fd);
       wu->bufferPool->Reclaim(conn);
       return;
@@ -322,18 +321,13 @@ void WuClientSendPendingDTLS(const WuHost* wu, WuClient* client) {
 
 void TLSSend(const WuHost* wu, WuClient* client, const void* data,
              int32_t length) {
-  if (client->state < WuClient_Pending) {
-    printf("TLSSend called on an invalid client: %s\n",
-           WuClientStateString(client->state));
+  if (client->state < WuClient_DTLSHandshake ||
+      !SSL_is_init_finished(client->ssl)) {
     return;
   }
 
-  if (SSL_is_init_finished(client->ssl)) {
-    SSL_write(client->ssl, data, length);
-    WuClientSendPendingDTLS(wu, client);
-  } else {
-    printf("attempting to send TLS data before handshake\n");
-  }
+  SSL_write(client->ssl, data, length);
+  WuClientSendPendingDTLS(wu, client);
 }
 
 void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
@@ -342,13 +336,7 @@ void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
   memset(outBuffer, 0, sizeof(outBuffer));
   size_t bytesWritten = SerializeSctpPacket(packet, chunks, numChunks,
                                             outBuffer, sizeof(outBuffer));
-  if (bytesWritten < 12) {
-    printf("created a malformed packet\n");
-  }
-
-  if (bytesWritten > 0) {
-    TLSSend(wu, client, outBuffer, bytesWritten);
-  }
+  TLSSend(wu, client, outBuffer, bytesWritten);
 }
 
 void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
@@ -396,9 +384,8 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
           dc->userData = &outType;
           dc->userDataLength = 1;
 
-          if (client->state != WuClient_Connected) {
-            client->state = WuClient_Connected;
-            client->joinEvtPushed = 1;
+          if (client->state != WuClient_DataChannelOpen) {
+            client->state = WuClient_DataChannelOpen;
             WuEvent event;
             event.type = WuEvent_ClientJoin;
             event.client = client;
@@ -460,6 +447,9 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
       WuSendSctp(wu, client, &response, &rc, 1);
       break;
     } else if (chunk->type == Sctp_CookieEcho) {
+      if (client->state < WuClient_SCTPEstablished) {
+        client->state = WuClient_SCTPEstablished;
+      }
       SctpPacket response;
       response.sourcePort = sctpPacket.destionationPort;
       response.destionationPort = sctpPacket.sourcePort;
@@ -490,7 +480,6 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
     } else if (chunk->type == Sctp_HeartbeatAck) {
       client->ttl = kMaxClientTtl;
     } else if (chunk->type == Sctp_Abort) {
-      printf("received abort\n");
       client->state = WuClient_WaitingRemoval;
       return;
     } else if (chunk->type == Sctp_Sack) {
@@ -508,8 +497,6 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
         fwdTsnChunk.as.forwardTsn.newCumulativeTsn = client->tsn;
         WuSendSctp(wu, client, &fwdResponse, &fwdTsnChunk, 1);
       }
-    } else {
-      printf("received unknown sctp chunk %u\n", chunk->type);
     }
   }
 }
@@ -587,9 +574,6 @@ void WuHostPurgeDeadClients(WuHost* wu) {
       evt.type = WuEvent_ClientLeave;
       evt.client = client;
       WuHostPushEvent(wu, evt);
-      if (!client->joinEvtPushed) {
-        printf("purging a not pushed dead client %p\n", client);
-      }
     }
   }
 }
@@ -848,8 +832,7 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
 
 int32_t WuSendData(WuHost* wu, WuClient* client, const uint8_t* data,
                    int32_t length, DataChanProtoIdentifier proto) {
-  if (client->state != WuClient_Connected) {
-    printf("attempting to send data to dead client\n");
+  if (client->state < WuClient_DataChannelOpen) {
     return -1;
   }
 
