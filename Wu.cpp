@@ -13,14 +13,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <algorithm>
-#include <vector>
 #include "WuArena.h"
 #include "WuCert.h"
 #include "WuCert.h"
 #include "WuClock.h"
 #include "WuDataChannel.h"
 #include "WuHttp.h"
+#include "WuMath.h"
 #include "WuNetwork.h"
 #include "WuPool.h"
 #include "WuQueue.h"
@@ -62,30 +61,21 @@ struct WuConnectionBuffer {
 };
 
 struct WuConnectionBufferPool {
-  WuConnectionBufferPool(size_t n) : buffers(n) {
-    for (size_t i = 0; i < n; i++) {
-      freeBuffers.push_back(&buffers[i]);
-    }
-  }
+  WuConnectionBufferPool(size_t n)
+      : pool(WuPoolCreate(sizeof(WuConnectionBuffer), n)) {}
 
   WuConnectionBuffer* GetBuffer() {
-    if (freeBuffers.size() > 0) {
-      WuConnectionBuffer* buf = freeBuffers.back();
-      freeBuffers.pop_back();
-      return buf;
-    }
-
-    return nullptr;
+    WuConnectionBuffer* buffer = (WuConnectionBuffer*)WuPoolAcquire(pool);
+    return buffer;
   }
 
   void Reclaim(WuConnectionBuffer* buf) {
     buf->fd = -1;
     buf->size = 0;
-    freeBuffers.push_back(buf);
+    WuPoolRelease(pool, buf);
   }
 
-  std::vector<WuConnectionBuffer> buffers;
-  std::vector<WuConnectionBuffer*> freeBuffers;
+  WuPool* pool;
 };
 
 const double kMaxClientTtl = 8.0;
@@ -160,9 +150,9 @@ void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
 
 WuClient* WuHostNewClient(WuHost* wu) {
   WuClient* client = (WuClient*)WuPoolAcquire(wu->clientPool);
-  memset(client, 0, sizeof(WuClient));
 
   if (client) {
+    memset(client, 0, sizeof(WuClient));
     WuClientStart(wu, client);
     wu->clients[wu->numClients++] = client;
     return client;
@@ -262,14 +252,12 @@ void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
               client->serverPassword.length = 24;
               WuRandomString((char*)client->serverPassword.identifier,
                              client->serverPassword.length);
-              memcpy(
-                  client->remoteUser.identifier, iceFields.ufrag.value,
-                  std::min(iceFields.ufrag.length, kMaxStunIdentifierLength));
+              memcpy(client->remoteUser.identifier, iceFields.ufrag.value,
+                     Min(iceFields.ufrag.length, kMaxStunIdentifierLength));
               client->remoteUser.length = iceFields.ufrag.length;
               memcpy(client->remoteUserPassword.identifier,
                      iceFields.password.value,
-                     std::min(iceFields.password.length,
-                              kMaxStunIdentifierLength));
+                     Min(iceFields.password.length, kMaxStunIdentifierLength));
 
               int bodyLength = 0;
               const char* body = GenerateSDP(
@@ -398,7 +386,7 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
       const uint8_t* userDataBegin = dataChunk->userData;
       const int32_t userDataLength = dataChunk->userDataLength;
 
-      client->remoteTsn = std::max(chunk->as.data.tsn, client->remoteTsn);
+      client->remoteTsn = Max(chunk->as.data.tsn, client->remoteTsn);
       client->ttl = kMaxClientTtl;
 
       if (dataChunk->protoId == DCProto_Control) {
@@ -672,7 +660,7 @@ int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
 }
 
 int32_t WuInit(WuHost* wu, const WuConf* conf) {
-  wu->arena = (WuArena*)calloc(1, sizeof(WuArena)); 
+  wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
   WuArenaInit(wu->arena, 1 << 20);
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
@@ -825,22 +813,25 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
         }
 
         if (MakeNonBlocking(infd) == -1) {
-          abort();
+          close(infd);
+          continue;
         }
 
         WuConnectionBuffer* conn = pool->GetBuffer();
-        assert(conn);
-        conn->fd = infd;
 
-        struct epoll_event event;
-        event.events = EPOLLIN | EPOLLET;
-        event.data.ptr = conn;
-        if (epoll_ctl(wu->epfd, EPOLL_CTL_ADD, infd, &event) == -1) {
-          perror("epoll_ctl");
-          abort();
+        if (conn) {
+          conn->fd = infd;
+          struct epoll_event event;
+          event.events = EPOLLIN | EPOLLET;
+          event.data.ptr = conn;
+          if (epoll_ctl(wu->epfd, EPOLL_CTL_ADD, infd, &event) == -1) {
+            close(infd);
+            perror("epoll_ctl");
+          }
+        } else {
+          close(infd);
         }
       }
-      continue;
     } else if (wu->udpfd == c->fd) {
       struct sockaddr_in remote;
       socklen_t remoteLen = sizeof(remote);

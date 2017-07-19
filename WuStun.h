@@ -34,7 +34,8 @@ struct StunAddress {
   } address;
 };
 
-inline bool StunUserIdentifierEqual(const StunUserIdentifier* a, const StunUserIdentifier* b) {
+inline bool StunUserIdentifierEqual(const StunUserIdentifier* a,
+                                    const StunUserIdentifier* b) {
   return MemEqual(a->identifier, a->length, b->identifier, b->length);
 }
 

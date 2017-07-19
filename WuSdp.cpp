@@ -135,26 +135,24 @@ const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
    * a=sctpmap:{port} webrtc-datachannel {max-size}
    */
   char buf[2048];
-  int written =
-      snprintf(buf, 2048,
-               "v=0\r\n"
-               "o=- %u 1 IN IP4 %s\r\n"
-               "s=-\r\n"
-               "t=0 0\r\n"
-               "m=application %s DTLS/SCTP %s\r\n"
-               "c=IN IP4 %s\r\n"
-               "a=ice-lite\r\n"
-               "a=ice-ufrag:%.*s\r\n"
-               "a=ice-pwd:%.*s\r\n"
-               "a=fingerprint:sha-256 %s\r\n"
-               "a=ice-options:trickle\r\n"
-               "a=setup:passive\r\n"
-               "a=mid:%.*s\r\n"
-               "a=sctpmap:%s webrtc-datachannel 1024\r\n",
-               WuRandomU32(), serverPort, serverIp, serverPort, serverIp,
-               ufragLen, ufrag, passLen, pass, certFingerprint,
-               remote->mid.length, remote->mid.value, serverPort);
-  (void)written;
+  snprintf(buf, 2048,
+           "v=0\r\n"
+           "o=- %u 1 IN IP4 %s\r\n"
+           "s=-\r\n"
+           "t=0 0\r\n"
+           "m=application %s DTLS/SCTP %s\r\n"
+           "c=IN IP4 %s\r\n"
+           "a=ice-lite\r\n"
+           "a=ice-ufrag:%.*s\r\n"
+           "a=ice-pwd:%.*s\r\n"
+           "a=fingerprint:sha-256 %s\r\n"
+           "a=ice-options:trickle\r\n"
+           "a=setup:passive\r\n"
+           "a=mid:%.*s\r\n"
+           "a=sctpmap:%s webrtc-datachannel 1024\r\n",
+           WuRandomU32(), serverPort, serverIp, serverPort, serverIp, ufragLen,
+           ufrag, passLen, pass, certFingerprint, remote->mid.length,
+           remote->mid.value, serverPort);
 
   rjs::Document doc;
   doc.SetObject();

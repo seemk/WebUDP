@@ -1,8 +1,8 @@
 #pragma once
+#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
-#include <assert.h>
 
 enum SocketType { ST_TCP, ST_UDP };
 

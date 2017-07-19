@@ -37,7 +37,8 @@ int32_t FindTokenIndex(const char* s, size_t len, char token) {
   return -1;
 }
 
-bool MemEqual(const void* first, size_t firstLen, const void* second, size_t secondLen) {
+bool MemEqual(const void* first, size_t firstLen, const void* second,
+              size_t secondLen) {
   if (firstLen != secondLen) return false;
 
   return memcmp(first, second, firstLen) == 0;

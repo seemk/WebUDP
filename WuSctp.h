@@ -98,3 +98,4 @@ size_t SerializeSctpPacket(const SctpPacket* packet, const SctpChunk* chunks,
 
 int32_t SctpDataChunkLength(int32_t userDataLength);
 int32_t SctpChunkLength(int32_t contentLength);
+const char* SctpTypeName(SctpChunkType type);

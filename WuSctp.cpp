@@ -2,9 +2,9 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <string.h>
-#include <algorithm>
 #include "CRC32.h"
 #include "WuBufferOp.h"
+#include "WuMath.h"
 #include "WuNetwork.h"
 
 const char* SctpTypeName(SctpChunkType type) {
@@ -39,7 +39,6 @@ const char* SctpTypeName(SctpChunkType type) {
 int32_t ParseSctpPacket(const uint8_t* buf, size_t len, SctpPacket* packet,
                         SctpChunk* chunks, size_t maxChunks, size_t* nChunk) {
   if (len < 16) {
-    printf("SCTP packet: invalid\n");
     return 0;
   }
 
@@ -68,7 +67,7 @@ int32_t ParseSctpPacket(const uint8_t* buf, size_t len, SctpPacket* packet,
       chunkOffset +=
           ReadScalarSwapped(buf + offset + chunkOffset, &p->streamSeq);
       chunkOffset += ReadScalarSwapped(buf + offset + chunkOffset, &p->protoId);
-      p->userDataLength = std::max(int32_t(chunk->length) - 16, 0);
+      p->userDataLength = Max(int32_t(chunk->length) - 16, 0);
       p->userData = buf + offset + chunkOffset;
     } else if (chunk->type == Sctp_Sack) {
       auto* sack = &chunk->as.sack;

@@ -1,12 +1,9 @@
 #pragma once
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
-enum DataChannelMessageType {
-  DCMessage_Ack = 0x02,
-  DCMessage_Open = 0x03
-};
+enum DataChannelMessageType { DCMessage_Ack = 0x02, DCMessage_Open = 0x03 };
 
 enum DataChanProtoIdentifier {
   DCProto_Control = 50,
@@ -28,5 +25,6 @@ struct DataChannelPacket {
   } as;
 };
 
-int32_t ParseDataChannelControlPacket(const uint8_t* buf, size_t len, DataChannelPacket* packet);
+int32_t ParseDataChannelControlPacket(const uint8_t* buf, size_t len,
+                                      DataChannelPacket* packet);
 const char* DataChannelMessageTypeName(uint8_t type);

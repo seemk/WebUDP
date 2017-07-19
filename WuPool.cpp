@@ -46,7 +46,7 @@ void* WuPoolAcquire(WuPool* pool) {
   const int32_t offset = index * pool->slotSize;
 
   uint8_t* block = pool->memory + offset;
-  BlockHeader* header = (BlockHeader*)block; 
+  BlockHeader* header = (BlockHeader*)block;
   header->index = index;
 
   uint8_t* userMem = block + sizeof(BlockHeader);
