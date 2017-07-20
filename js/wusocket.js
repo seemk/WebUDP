@@ -16,9 +16,10 @@ WuSocket.prototype.close = function() {
 
 WuSocket.prototype.beginConnection = function() {
   var socket = this;
+  let stunAddress = socket.address.replace(/^(http|https):\/\//i, "stun:");
   this.peer = new RTCPeerConnection({
     iceServers: [{
-      urls: ["stun:stun.l.google.com:19302"]
+      urls: [stunAddress]
     }]
   });
   var peer = this.peer;
