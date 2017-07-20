@@ -1,8 +1,9 @@
 #include "WuCert.h"
-#include <openssl/pem.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <assert.h>
+#include <openssl/pem.h>
+#include <openssl/rand.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include "WuRng.h"
 
 WuCert* WuCertNew() {
@@ -12,7 +13,13 @@ WuCert* WuCertNew() {
   RSA* rsa = RSA_new();
   BIGNUM* n = BN_new();
   BN_set_word(n, RSA_F4);
-  RSA_generate_key_ex(rsa, 1024, n, NULL); // TODO: Seed prng
+
+  if (!RAND_status()) {
+    uint64_t seed = WuRandomU64();
+    RAND_seed(&seed, sizeof(seed));
+  }
+
+  RSA_generate_key_ex(rsa, 1024, n, NULL);
   EVP_PKEY_assign_RSA(cert->key, rsa);
 
   cert->x509 = X509_new();

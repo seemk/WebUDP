@@ -31,12 +31,15 @@ target_include_directories(Wu
 
 target_link_libraries(Wu
   PRIVATE OpenSSL::SSL
+  PRIVATE OpenSSL::Crypto
   PRIVATE Threads::Threads
 )
 
 target_compile_options(Wu
   PRIVATE
   -Wall
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
 install(TARGETS Wu EXPORT WuTargets
