@@ -29,9 +29,13 @@ struct WuEvent {
   } as;
 };
 
+typedef void (*WuErrorFn)(const char* err, void* userData);
+
 struct WuConf {
   const char* host;
   const char* port;
+  WuErrorFn errorHandler;
+  void* errorHandlerData;
 };
 
 struct WuHost {
@@ -56,6 +60,10 @@ struct WuHost {
   ssl_ctx_st* sslCtx;
 
   const WuConf* conf;
+
+  char errBuf[512];
+  void* errorHandlerData;
+  WuErrorFn errorHandler;
 };
 
 int32_t WuInit(WuHost* wu, const WuConf* conf);

@@ -54,6 +54,16 @@ const char* WuClientStateString(WuClientState state) {
   }
 }
 
+void WuHandleError(WuHost* wu, const char* description) {
+  wu->errorHandler(description, wu->errorHandlerData);
+}
+
+void WuHandleErrno(WuHost* wu, const char* description) {
+  snprintf(wu->errBuf, sizeof(wu->errBuf), "%s: %s", description,
+           strerror(errno));
+  WuHandleError(wu, wu->errBuf);
+}
+
 struct WuConnectionBuffer {
   size_t size = 0;
   int fd = -1;
@@ -204,7 +214,7 @@ void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
                          kMaxHttpRequestLength - conn->size);
     if (count == -1) {
       if (errno != EAGAIN) {
-        perror("read");
+        WuHandleErrno(wu, "failed to read from TCP socket");
         close(conn->fd);
         wu->bufferPool->Reclaim(conn);
       }
@@ -660,13 +670,19 @@ int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
 }
 
 int32_t WuInit(WuHost* wu, const WuConf* conf) {
+  memset(wu, 0, sizeof(WuHost));
   wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
   WuArenaInit(wu->arena, 1 << 20);
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
 
+  wu->errorHandler =
+      conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
+  wu->errorHandlerData = conf->errorHandlerData;
+
   wu->port = atoi(conf->port);
   if (!WuCryptoInit(wu, conf)) {
+    WuHandleError(wu, "failed to init crypto");
     return 0;
   }
 
@@ -683,7 +699,7 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
 
   s = listen(wu->tcpfd, SOMAXCONN);
   if (s == -1) {
-    perror("listen");
+    WuHandleErrno(wu, "tcp listen failed");
     return 0;
   }
 
@@ -700,7 +716,7 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
 
   wu->epfd = epoll_create1(0);
   if (wu->epfd == -1) {
-    perror("epoll_create");
+    WuHandleErrno(wu, "epoll_create");
     return 0;
   }
 
@@ -721,14 +737,14 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
 
   s = epoll_ctl(wu->epfd, EPOLL_CTL_ADD, wu->tcpfd, &event);
   if (s == -1) {
-    perror("epoll_ctl");
+    WuHandleErrno(wu, "EPOLL_CTL_ADD tcpfd");
     return 0;
   }
 
   event.data.ptr = udpBuf;
   s = epoll_ctl(wu->epfd, EPOLL_CTL_ADD, wu->udpfd, &event);
   if (s == -1) {
-    perror("epoll_ctl");
+    WuHandleErrno(wu, "EPOLL_CTL_ADD udpfd");
     return 0;
   }
 
@@ -807,7 +823,7 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
           if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
             break;
           } else {
-            perror("accept");
+            WuHandleErrno(wu, "tcp accept");
             break;
           }
         }
@@ -826,7 +842,7 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
           event.data.ptr = conn;
           if (epoll_ctl(wu->epfd, EPOLL_CTL_ADD, infd, &event) == -1) {
             close(infd);
-            perror("epoll_ctl");
+            WuHandleErrno(wu, "EPOLL_CTL_ADD infd");
           }
         } else {
           close(infd);

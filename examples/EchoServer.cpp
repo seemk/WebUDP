@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <chrono>
 #include <thread>
 #include "../Wu.h"
@@ -8,6 +9,7 @@ int main(int argc, char** argv) {
   WuHost wu;
 
   WuConf conf;
+  memset(&conf, 0, sizeof(conf));
 
   if (argc > 2) {
     conf.host = argv[1];
@@ -16,6 +18,8 @@ int main(int argc, char** argv) {
     conf.host = "127.0.0.1";
     conf.port = "9555";
   }
+
+  conf.errorHandler = [](const char* e, void*) { printf("%s\n", e); };
 
   if (!WuInit(&wu, &conf)) {
     printf("init fail\n");

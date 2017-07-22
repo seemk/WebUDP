@@ -24,7 +24,6 @@ ssize_t SocketWrite(int fd, const uint8_t* buf, size_t len) {
     ssize_t r = write(fd, buf + written, towrite - written);
     if (r == 0) return written;
     if (r == -1) {
-      perror("socketwrite");
       return -1;
     }
 
@@ -41,7 +40,6 @@ ssize_t SocketWrite(int fd, const char* buf, size_t len) {
 int MakeNonBlocking(int sfd) {
   int flags = fcntl(sfd, F_GETFL, 0);
   if (flags == -1) {
-    perror("fcntl");
     return -1;
   }
 
@@ -49,7 +47,6 @@ int MakeNonBlocking(int sfd) {
 
   int s = fcntl(sfd, F_SETFL, flags);
   if (s == -1) {
-    perror("set fcntl");
     return -1;
   }
 
@@ -68,7 +65,6 @@ int CreateSocket(const char* port, SocketType type) {
   int s = getaddrinfo(NULL, port, &hints, &result);
 
   if (s != 0) {
-    printf("getaddrinfo: %s\n", gai_strerror(s));
     return -1;
   }
 
@@ -82,9 +78,7 @@ int CreateSocket(const char* port, SocketType type) {
     }
 
     int enable = 1;
-    if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0) {
-      fprintf(stderr, "setsockopt(SO_REUSEADDR) failed");
-    }
+    setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
 
     s = bind(sfd, rp->ai_addr, rp->ai_addrlen);
     if (s == 0) {
@@ -97,7 +91,6 @@ int CreateSocket(const char* port, SocketType type) {
   freeaddrinfo(result);
 
   if (rp == NULL) {
-    printf("Failed to bind\n");
     return -1;
   }
 
