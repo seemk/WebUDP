@@ -3,11 +3,16 @@ var WuSocket = function(address) {
   this.channel = null;
   this.onmessage = null;
   this.onopen = null;
+  this.open = false;
   this.beginConnection();
 };
 
 WuSocket.prototype.send = function(data) {
-  this.channel.send(data);
+  if (this.open) {
+    this.channel.send(data);
+  } else {
+    console.log("attempt to send in closed state");
+  }
 };
 
 WuSocket.prototype.close = function() {
@@ -16,10 +21,9 @@ WuSocket.prototype.close = function() {
 
 WuSocket.prototype.beginConnection = function() {
   var socket = this;
-  let stunAddress = socket.address.replace(/^(http|https):\/\//i, "stun:");
   this.peer = new RTCPeerConnection({
     iceServers: [{
-      urls: [stunAddress]
+      urls: ["stun:stun.l.google.com:19302"]
     }]
   });
   var peer = this.peer;
@@ -48,12 +52,14 @@ WuSocket.prototype.beginConnection = function() {
 
   channel.onopen = function() {
     console.log("data channel ready");
+    socket.open = true;
     if (typeof(socket.onopen) == "function") {
       socket.onopen();
     }
   };
 
   channel.onclose = function() {
+    this.open = false;
     console.log("data channel closed");
   };
 
