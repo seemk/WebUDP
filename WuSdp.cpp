@@ -4,11 +4,6 @@
 #include "WuArena.h"
 #include "WuRng.h"
 
-#include "rapidjson/document.h"
-#include "rapidjson/writer.h"
-
-namespace rjs = rapidjson;
-
 enum SdpParseState { kParseIgnore, kParseType, kParseEq, kParseField };
 
 bool BeginsWith(const char* s, size_t len, const char* prefix, size_t plen) {
@@ -104,24 +99,6 @@ bool ParseSdp(const char* sdp, size_t len, ICESdpFields* fields) {
   return true;
 }
 
-struct RjsArenaAllocator {
-  RjsArenaAllocator() { abort(); }
-  RjsArenaAllocator(WuArena* arena) : arena(arena) {}
-  WuArena* arena = nullptr;
-  static const bool kNeedFree = false;
-  void* Malloc(size_t size) { return WuArenaAcquire(arena, size); }
-
-  void* Realloc(void* orig, size_t origSize, size_t newSize) {
-    void* p = WuArenaAcquire(arena, newSize - origSize);
-    return orig ? orig : p;
-  }
-
-  static void Free(void*) {}
-};
-
-typedef rjs::GenericStringBuffer<rjs::UTF8<>, RjsArenaAllocator>
-    ArenaStringBuffer;
-
 const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
                         const char* serverIp, const char* serverPort,
                         const char* ufrag, int32_t ufragLen, const char* pass,
@@ -134,56 +111,34 @@ const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
    * m=application {port} DTLS/SCTP {port}
    * a=sctpmap:{port} webrtc-datachannel {max-size}
    */
-  char buf[2048];
-  snprintf(buf, 2048,
-           "v=0\r\n"
-           "o=- %u 1 IN IP4 %s\r\n"
-           "s=-\r\n"
-           "t=0 0\r\n"
-           "m=application %s DTLS/SCTP %s\r\n"
-           "c=IN IP4 %s\r\n"
-           "a=ice-lite\r\n"
-           "a=ice-ufrag:%.*s\r\n"
-           "a=ice-pwd:%.*s\r\n"
-           "a=fingerprint:sha-256 %s\r\n"
-           "a=ice-options:trickle\r\n"
-           "a=setup:passive\r\n"
-           "a=mid:%.*s\r\n"
-           "a=sctpmap:%s webrtc-datachannel 1024\r\n",
+  char buf[3096];
+  snprintf(buf, sizeof(buf),
+           "{\"answer\":{\"sdp\":\"v=0\\r\\n"
+           "o=- %u 1 IN IP4 %s\\r\\n"
+           "s=-\\r\\n"
+           "t=0 0\\r\\n"
+           "m=application %s DTLS/SCTP %s\\r\\n"
+           "c=IN IP4 %s\\r\\n"
+           "a=ice-lite\\r\\n"
+           "a=ice-ufrag:%.*s\\r\\n"
+           "a=ice-pwd:%.*s\\r\\n"
+           "a=fingerprint:sha-256 %s\\r\\n"
+           "a=ice-options:trickle\\r\\n"
+           "a=setup:passive\\r\\n"
+           "a=mid:%.*s\\r\\n"
+           "a=sctpmap:%s webrtc-datachannel 1024\\r\\n\","
+           "\"type\":\"answer\"},\"candidate\":{\"sdpMLineIndex\":0,"
+           "\"sdpMid\":\"%.*s\",\"candidate\":\"candidate:1 1 UDP %u %s %s typ "
+           "host\"}}",
            WuRandomU32(), serverPort, serverIp, serverPort, serverIp, ufragLen,
            ufrag, passLen, pass, certFingerprint, remote->mid.length,
-           remote->mid.value, serverPort);
+           remote->mid.value, serverPort, remote->mid.length, remote->mid.value,
+           WuRandomU32(), serverIp, serverPort);
 
-  rjs::Document doc;
-  doc.SetObject();
+  int32_t length = strlen(buf);
+  char* sdp = (char*)WuArenaAcquire(arena, length);
+  memcpy(sdp, buf, length);
+  *outLength = length;
 
-  auto& a = doc.GetAllocator();
-
-  rjs::Value answer(rjs::kObjectType);
-  rjs::Value sdp;
-  sdp.SetString(buf, a);
-  answer.AddMember("sdp", sdp, a);
-  answer.AddMember("type", "answer", a);
-  doc.AddMember("answer", answer, a);
-
-  char candidateBuf[128];
-  int candidateLen =
-      snprintf(candidateBuf, 128, "candidate:1 1 UDP %u %s %s typ host",
-               WuRandomU32(), serverIp, serverPort);
-
-  rjs::Value candidate(rjs::kObjectType);
-  candidate.AddMember("sdpMLineIndex", 0, a);
-  candidate.AddMember("sdpMid",
-                      rjs::StringRef(remote->mid.value, remote->mid.length), a);
-  candidate.AddMember("candidate", rjs::StringRef(candidateBuf, candidateLen),
-                      a);
-
-  doc.AddMember("candidate", candidate, a);
-
-  RjsArenaAllocator alloc(arena);
-  ArenaStringBuffer buffer(&alloc, 3072);
-  rjs::Writer<ArenaStringBuffer> writer(buffer);
-  doc.Accept(writer);
-  *outLength = int(buffer.GetSize());
-  return buffer.GetString();
+  return sdp;
 }
