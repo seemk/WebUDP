@@ -673,14 +673,16 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
   memset(wu, 0, sizeof(WuHost));
   wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
   WuArenaInit(wu->arena, 1 << 20);
+
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
+  wu->port = atoi(conf->port);
+  wu->pollTimeout = conf->blocking ? -1 : 0;
 
   wu->errorHandler =
       conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
   wu->errorHandlerData = conf->errorHandlerData;
 
-  wu->port = atoi(conf->port);
   if (!WuCryptoInit(wu, conf)) {
     WuHandleError(wu, "failed to init crypto");
     return 0;
@@ -802,7 +804,7 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
 
   WuHostUpdateClients(wu);
   WuArenaReset(wu->arena);
-  int n = epoll_wait(wu->epfd, wu->events, wu->maxEvents, 0);
+  int n = epoll_wait(wu->epfd, wu->events, wu->maxEvents, wu->pollTimeout);
 
   WuConnectionBufferPool* pool = wu->bufferPool;
   for (int i = 0; i < n; i++) {

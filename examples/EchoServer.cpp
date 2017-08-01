@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <chrono>
-#include <thread>
 #include "../Wu.h"
 
 int main(int argc, char** argv) {
@@ -10,6 +8,9 @@ int main(int argc, char** argv) {
 
   WuConf conf;
   memset(&conf, 0, sizeof(conf));
+
+  // The default mode is non-blocking.
+  conf.blocking = 1;
 
   if (argc > 2) {
     conf.host = argv[1];
@@ -49,8 +50,6 @@ int main(int argc, char** argv) {
           break;
       }
     }
-
-    std::this_thread::sleep_for(std::chrono::microseconds(1));
   }
 
   return 0;

@@ -34,6 +34,7 @@ typedef void (*WuErrorFn)(const char* err, void* userData);
 struct WuConf {
   const char* host;
   const char* port;
+  int blocking;
   WuErrorFn errorHandler;
   void* errorHandlerData;
 };
@@ -43,6 +44,7 @@ struct WuHost {
   double time;
   double dt;
   uint16_t port;
+  int pollTimeout;
   int tcpfd;
   int udpfd;
   int epfd;
