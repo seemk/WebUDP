@@ -1,7 +1,7 @@
 # WebUdp
 Minimal WebRTC datachannel server
 
-Work in progress, experimental!
+[Echo server demo](https://www.vektor.space/webudprtt.html) (Chrome, Firefox and maybe Safari 11)
 
 The library implements a minimal subset of WebRTC (grossly violating specs) to achieve unreliable and out of order UDP transfer for browser clients.
 
