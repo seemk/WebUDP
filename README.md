@@ -1,4 +1,4 @@
-# WebUdp
+# WebUDP
 Minimal WebRTC datachannel server
 
 [Echo server demo](https://www.vektor.space/webudprtt.html) (Chrome, Firefox and maybe Safari 11)
