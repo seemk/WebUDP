@@ -35,6 +35,7 @@ struct WuConf {
   const char* host;
   const char* port;
   int blocking;
+  int maxClients;
   WuErrorFn errorHandler;
   void* errorHandlerData;
 };

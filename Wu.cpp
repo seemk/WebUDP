@@ -117,12 +117,6 @@ void WuClientSetUserData(WuClient* client, void* user) { client->user = user; }
 
 void* WuClientGetUserData(const WuClient* client) { return client->user; }
 
-void SslInfoCallback(const SSL* ssl, int where, int ret) {
-  (void)where;
-  (void)ret;
-  (void)ssl;
-}
-
 void WuClientFinish(WuClient* client) {
   SSL_free(client->ssl);
   client->ssl = NULL;
@@ -142,7 +136,6 @@ void WuClientStart(const WuHost* wu, WuClient* client) {
   client->user = NULL;
 
   client->ssl = SSL_new(wu->sslCtx);
-  SSL_set_info_callback(client->ssl, SslInfoCallback);
 
   client->inBio = BIO_new(BIO_s_mem());
   BIO_set_mem_eof_return(client->inBio, -1);
@@ -754,7 +747,7 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
   wu->events = (struct epoll_event*)calloc(wu->maxEvents, sizeof(event));
   wu->conf = conf;
 
-  wu->maxClients = 256;
+  wu->maxClients = conf->maxClients <= 0 ? 256 : conf->maxClients;
   wu->numClients = 0;
   wu->clientPool = WuPoolCreate(sizeof(WuClient), wu->maxClients);
   wu->clients = (WuClient**)calloc(wu->maxClients, sizeof(WuClient*));
