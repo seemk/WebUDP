@@ -21,12 +21,8 @@ enum WuEventType {
 struct WuEvent {
   WuEventType type;
   WuClient* client;
-  union {
-    struct {
-      const uint8_t* buf;
-      int32_t length;
-    } data;
-  } as;
+  const uint8_t* data;
+  int32_t length;
 };
 
 typedef void (*WuErrorFn)(const char* err, void* userData);

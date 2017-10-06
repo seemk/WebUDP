@@ -41,8 +41,8 @@ int main(int argc, char** argv) {
           break;
         }
         case WuEvent_TextData: {
-          const char* text = (const char*)evt.as.data.buf;
-          int32_t length = evt.as.data.length;
+          const char* text = (const char*)evt.data;
+          int32_t length = evt.length;
           WuSendText(&wu, evt.client, text, length);
           break;
         }

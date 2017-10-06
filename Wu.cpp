@@ -430,15 +430,15 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
         WuEvent evt;
         evt.type = WuEvent_TextData;
         evt.client = client;
-        evt.as.data.buf = dataChunk->userData;
-        evt.as.data.length = dataChunk->userDataLength;
+        evt.data = dataChunk->userData;
+        evt.length = dataChunk->userDataLength;
         WuHostPushEvent(wu, evt);
       } else if (dataChunk->protoId == DCProto_Binary) {
         WuEvent evt;
         evt.type = WuEvent_BinaryData;
         evt.client = client;
-        evt.as.data.buf = dataChunk->userData;
-        evt.as.data.length = dataChunk->userDataLength;
+        evt.data = dataChunk->userData;
+        evt.length = dataChunk->userDataLength;
         WuHostPushEvent(wu, evt);
       }
 
