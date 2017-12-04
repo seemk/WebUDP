@@ -4,7 +4,6 @@
 #include <stdint.h>
 
 struct WuClient;
-struct WuConnectionBufferPool;
 struct WuPool;
 struct WuCert;
 struct WuArena;
@@ -25,7 +24,20 @@ struct WuEvent {
   int32_t length;
 };
 
+enum WuSDPStatus {
+  WuSDPStatus_Success,
+  WuSDPStatus_InvalidSDP,
+  WuSDPStatus_MaxClients
+};
+
+struct SDPResult {
+  WuSDPStatus status;
+  WuClient* client;
+};
+
 typedef void (*WuErrorFn)(const char* err, void* userData);
+typedef void (*WuWriteFn)(const uint8_t* data, size_t length,
+                          const WuClient* client, void* userData);
 
 struct WuConf {
   const char* host;
@@ -33,7 +45,6 @@ struct WuConf {
   int blocking;
   int maxClients;
   WuErrorFn errorHandler;
-  void* errorHandlerData;
 };
 
 struct WuHost {
@@ -41,14 +52,7 @@ struct WuHost {
   double time;
   double dt;
   uint16_t port;
-  int pollTimeout;
-  int tcpfd;
-  int udpfd;
-  int epfd;
   WuQueue* pendingEvents;
-  WuConnectionBufferPool* bufferPool;
-  int32_t maxEvents;
-  struct epoll_event* events;
   int32_t maxClients;
   int32_t numClients;
 
@@ -61,8 +65,10 @@ struct WuHost {
   const WuConf* conf;
 
   char errBuf[512];
-  void* errorHandlerData;
+  void* userData;
   WuErrorFn errorHandler;
+  WuWriteFn writeUdpData;
+  WuWriteFn writeSignallingData;
 };
 
 int32_t WuInit(WuHost* wu, const WuConf* conf);
@@ -74,3 +80,6 @@ int32_t WuSendBinary(WuHost* wu, WuClient* client, const uint8_t* data,
 void WuRemoveClient(WuHost* wu, WuClient* client);
 void WuClientSetUserData(WuClient* client, void* user);
 void* WuClientGetUserData(const WuClient* client);
+SDPResult WuHandleSDP(WuHost* wu, const char* sdp, int32_t length);
+void WuHandleUDP(WuHost* wu, const uint8_t* data, int32_t length);
+void WuHostSetUserData(WuHost* wu, void* userData);

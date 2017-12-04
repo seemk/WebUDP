@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include "WuArena.h"
 #include "WuCert.h"
-#include "WuCert.h"
 #include "WuClock.h"
 #include "WuDataChannel.h"
 #include "WuHttp.h"
@@ -28,6 +27,8 @@
 #include "WuSdp.h"
 #include "WuStun.h"
 #include "picohttpparser.h"
+
+static void WriteNothing(const uint8_t*, size_t, const WuClient*, void*) {}
 
 enum WuClientState {
   WuClient_Dead,
@@ -55,7 +56,7 @@ const char* WuClientStateString(WuClientState state) {
 }
 
 void WuHandleError(WuHost* wu, const char* description) {
-  wu->errorHandler(description, wu->errorHandlerData);
+  wu->errorHandler(description, wu->userData);
 }
 
 void WuHandleErrno(WuHost* wu, const char* description) {
@@ -201,114 +202,6 @@ bool SockAddrEqual(const sockaddr_in* a, const sockaddr_in* b) {
          a->sin_addr.s_addr == b->sin_addr.s_addr && a->sin_port == b->sin_port;
 }
 
-void WuHandleHttpRequest(WuHost* wu, WuConnectionBuffer* conn) {
-  for (;;) {
-    ssize_t count = read(conn->fd, conn->requestBuffer + conn->size,
-                         kMaxHttpRequestLength - conn->size);
-    if (count == -1) {
-      if (errno != EAGAIN) {
-        WuHandleErrno(wu, "failed to read from TCP socket");
-        close(conn->fd);
-        wu->bufferPool->Reclaim(conn);
-      }
-      return;
-    } else if (count == 0) {
-      close(conn->fd);
-      wu->bufferPool->Reclaim(conn);
-      return;
-    }
-
-    size_t prevSize = conn->size;
-    conn->size += count;
-
-    const char* method;
-    const char* path;
-    size_t methodLength, pathLength;
-    int minorVersion;
-    struct phr_header headers[16];
-    size_t numHeaders = 16;
-    int parseStatus = phr_parse_request(
-        (const char*)conn->requestBuffer, conn->size, &method, &methodLength,
-        &path, &pathLength, &minorVersion, headers, &numHeaders, prevSize);
-
-    if (parseStatus > 0) {
-      size_t contentLength = 0;
-      for (size_t i = 0; i < numHeaders; i++) {
-        if (CompareCaseInsensitive(headers[i].name, headers[i].name_len,
-                                   STRLIT("content-length"))) {
-          contentLength = StringToUint(headers[i].value, headers[i].value_len);
-          break;
-        }
-      }
-
-      if (contentLength > 0) {
-        if (conn->size == parseStatus + contentLength) {
-          ICESdpFields iceFields;
-          if (ParseSdp((const char*)conn->requestBuffer + parseStatus,
-                       contentLength, &iceFields)) {
-            WuClient* client = WuHostNewClient(wu);
-
-            if (client) {
-              client->serverUser.length = 4;
-              WuRandomString((char*)client->serverUser.identifier,
-                             client->serverUser.length);
-              client->serverPassword.length = 24;
-              WuRandomString((char*)client->serverPassword.identifier,
-                             client->serverPassword.length);
-              memcpy(client->remoteUser.identifier, iceFields.ufrag.value,
-                     Min(iceFields.ufrag.length, kMaxStunIdentifierLength));
-              client->remoteUser.length = iceFields.ufrag.length;
-              memcpy(client->remoteUserPassword.identifier,
-                     iceFields.password.value,
-                     Min(iceFields.password.length, kMaxStunIdentifierLength));
-
-              int bodyLength = 0;
-              const char* body = GenerateSDP(
-                  wu->arena, wu->cert->fingerprint, wu->conf->host,
-                  wu->conf->port, (char*)client->serverUser.identifier,
-                  client->serverUser.length,
-                  (char*)client->serverPassword.identifier,
-                  client->serverPassword.length, &iceFields, &bodyLength);
-
-              char response[4096];
-              int responseLength = snprintf(response, 4096,
-                                            "HTTP/1.1 200 OK\r\n"
-                                            "Content-Type: application/json\r\n"
-                                            "Content-Length: %d\r\n"
-                                            "Connection: close\r\n"
-                                            "Access-Control-Allow-Origin: *\r\n"
-                                            "\r\n%s",
-                                            bodyLength, body);
-              SocketWrite(conn->fd, response, responseLength);
-            } else {
-              SocketWrite(conn->fd, STRLIT(HTTP_UNAVAILABLE));
-            }
-
-          } else {
-            SocketWrite(conn->fd, STRLIT(HTTP_BAD_REQUEST));
-          }
-
-          close(conn->fd);
-          wu->bufferPool->Reclaim(conn);
-        }
-      }
-
-      return;
-    } else if (parseStatus == -1) {
-      close(conn->fd);
-      wu->bufferPool->Reclaim(conn);
-      return;
-    } else {
-      if (conn->size == kMaxHttpRequestLength) {
-        SocketWrite(conn->fd, STRLIT(HTTP_BAD_REQUEST));
-        close(conn->fd);
-        wu->bufferPool->Reclaim(conn);
-        return;
-      }
-    }
-  }
-}
-
 WuClient* WuHostFindClient(WuHost* wu, const sockaddr_in* address) {
   for (int32_t i = 0; i < wu->numClients; i++) {
     WuClient* client = wu->clients[i];
@@ -333,20 +226,13 @@ WuClient* WuHostFindClientByCreds(WuHost* wu, const StunUserIdentifier* svUser,
   return NULL;
 }
 
-ssize_t UDPSend(const WuHost* wu, const WuClient* client, const void* data,
-                size_t size) {
-  int ret = sendto(wu->udpfd, data, size, 0, (struct sockaddr*)&client->address,
-                   sizeof(client->address));
-  return ret;
-}
-
 void WuClientSendPendingDTLS(const WuHost* wu, WuClient* client) {
   uint8_t sendBuffer[4096];
 
   while (BIO_ctrl_pending(client->outBio) > 0) {
     int bytes = BIO_read(client->outBio, sendBuffer, sizeof(sendBuffer));
     if (bytes > 0) {
-      UDPSend(wu, client, sendBuffer, bytes);
+      wu->writeUdpData(sendBuffer, bytes, client, wu->userData);
     }
   }
 }
@@ -591,8 +477,8 @@ void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
   size_t serializedSize =
       SerializeStunPacket(&outPacket, client->serverPassword.identifier,
                           client->serverPassword.length, stunResponse, 512);
-  sendto(wu->udpfd, stunResponse, serializedSize, 0, (struct sockaddr*)address,
-         sizeof(sockaddr_in));
+
+  wu->writeUdpData(stunResponse, serializedSize, client, wu->userData);
 
   client->localSctpPort = ntohs(address->sin_port);
   client->address = *address;
@@ -670,83 +556,18 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
   wu->port = atoi(conf->port);
-  wu->pollTimeout = conf->blocking ? -1 : 0;
 
   wu->errorHandler =
       conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
-  wu->errorHandlerData = conf->errorHandlerData;
+  wu->writeUdpData = WriteNothing;
+  wu->writeSignallingData = WriteNothing;
 
   if (!WuCryptoInit(wu, conf)) {
     WuHandleError(wu, "failed to init crypto");
     return 0;
   }
 
-  wu->tcpfd = CreateSocket(conf->port, ST_TCP);
-
-  if (wu->tcpfd == -1) {
-    return 0;
-  }
-
-  int s = MakeNonBlocking(wu->tcpfd);
-  if (s == -1) {
-    return 0;
-  }
-
-  s = listen(wu->tcpfd, SOMAXCONN);
-  if (s == -1) {
-    WuHandleErrno(wu, "tcp listen failed");
-    return 0;
-  }
-
-  wu->udpfd = CreateSocket(conf->port, ST_UDP);
-
-  if (wu->udpfd == -1) {
-    return 0;
-  }
-
-  s = MakeNonBlocking(wu->udpfd);
-  if (s == -1) {
-    return 0;
-  }
-
-  wu->epfd = epoll_create1(0);
-  if (wu->epfd == -1) {
-    WuHandleErrno(wu, "epoll_create");
-    return 0;
-  }
-
-  const int32_t maxEvents = 128;
-
-  wu->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
-  wu->bufferPool = new WuConnectionBufferPool(maxEvents + 2);
-
-  WuConnectionBuffer* udpBuf = wu->bufferPool->GetBuffer();
-  udpBuf->fd = wu->udpfd;
-
-  WuConnectionBuffer* tcpBuf = wu->bufferPool->GetBuffer();
-  tcpBuf->fd = wu->tcpfd;
-
-  struct epoll_event event;
-  event.data.ptr = tcpBuf;
-  event.events = EPOLLIN | EPOLLET;
-
-  s = epoll_ctl(wu->epfd, EPOLL_CTL_ADD, wu->tcpfd, &event);
-  if (s == -1) {
-    WuHandleErrno(wu, "EPOLL_CTL_ADD tcpfd");
-    return 0;
-  }
-
-  event.data.ptr = udpBuf;
-  s = epoll_ctl(wu->epfd, EPOLL_CTL_ADD, wu->udpfd, &event);
-  if (s == -1) {
-    WuHandleErrno(wu, "EPOLL_CTL_ADD udpfd");
-    return 0;
-  }
-
-  wu->maxEvents = maxEvents;
-  wu->events = (struct epoll_event*)calloc(wu->maxEvents, sizeof(event));
   wu->conf = conf;
-
   wu->maxClients = conf->maxClients <= 0 ? 256 : conf->maxClients;
   wu->numClients = 0;
   wu->clientPool = WuPoolCreate(sizeof(WuClient), wu->maxClients);
@@ -797,77 +618,6 @@ int32_t WuServe(WuHost* wu, WuEvent* evt) {
 
   WuHostUpdateClients(wu);
   WuArenaReset(wu->arena);
-  int n = epoll_wait(wu->epfd, wu->events, wu->maxEvents, wu->pollTimeout);
-
-  WuConnectionBufferPool* pool = wu->bufferPool;
-  for (int i = 0; i < n; i++) {
-    struct epoll_event* e = &wu->events[i];
-    WuConnectionBuffer* c = (WuConnectionBuffer*)e->data.ptr;
-    if ((e->events & EPOLLERR) || (e->events & EPOLLHUP) ||
-        (!(e->events & EPOLLIN))) {
-      close(c->fd);
-      pool->Reclaim(c);
-      continue;
-    } else if (wu->tcpfd == c->fd) {
-      for (;;) {
-        struct sockaddr_in inAddress;
-        socklen_t inLength = sizeof(inAddress);
-
-        int infd = accept(wu->tcpfd, (struct sockaddr*)&inAddress, &inLength);
-        if (infd == -1) {
-          if ((errno == EAGAIN) || (errno == EWOULDBLOCK)) {
-            break;
-          } else {
-            WuHandleErrno(wu, "tcp accept");
-            break;
-          }
-        }
-
-        if (MakeNonBlocking(infd) == -1) {
-          close(infd);
-          continue;
-        }
-
-        WuConnectionBuffer* conn = pool->GetBuffer();
-
-        if (conn) {
-          conn->fd = infd;
-          struct epoll_event event;
-          event.events = EPOLLIN | EPOLLET;
-          event.data.ptr = conn;
-          if (epoll_ctl(wu->epfd, EPOLL_CTL_ADD, infd, &event) == -1) {
-            close(infd);
-            WuHandleErrno(wu, "EPOLL_CTL_ADD infd");
-          }
-        } else {
-          close(infd);
-        }
-      }
-    } else if (wu->udpfd == c->fd) {
-      struct sockaddr_in remote;
-      socklen_t remoteLen = sizeof(remote);
-      uint8_t buf[4096];
-
-      ssize_t r = 0;
-      do {
-        r = recvfrom(wu->udpfd, buf, 4096, 0, (struct sockaddr*)&remote,
-                     &remoteLen);
-        StunPacket stunPacket;
-        if (ParseStun(buf, r, &stunPacket)) {
-          WuHostHandleStun(wu, &stunPacket, &remote);
-        } else {
-          WuHostReceiveDTLSPacket(wu, buf, size_t(r), &remote);
-        }
-      } while (r > 0);
-
-    } else {
-      WuHandleHttpRequest(wu, c);
-    }
-  }
-
-  if (WuQueuePop(wu->pendingEvents, evt)) {
-    return 1;
-  }
 
   WuHostPurgeDeadClients(wu);
 
@@ -910,4 +660,45 @@ int32_t WuSendText(WuHost* wu, WuClient* client, const char* text,
 int32_t WuSendBinary(WuHost* wu, WuClient* client, const uint8_t* data,
                      int32_t length) {
   return WuSendData(wu, client, data, length, DCProto_Binary);
+}
+
+SDPResult WuHandleSDP(WuHost* wu, const char* sdp, int32_t length) {
+  ICESdpFields iceFields;
+  if (!ParseSdp(sdp, length, &iceFields)) {
+    return {WuSDPStatus_InvalidSDP, NULL};
+  }
+
+  WuClient* client = WuHostNewClient(wu);
+
+  if (!client) {
+    return {WuSDPStatus_MaxClients, NULL};
+  }
+
+  client->serverUser.length = 4;
+  WuRandomString((char*)client->serverUser.identifier,
+                 client->serverUser.length);
+  client->serverPassword.length = 24;
+  WuRandomString((char*)client->serverPassword.identifier,
+                 client->serverPassword.length);
+  memcpy(client->remoteUser.identifier, iceFields.ufrag.value,
+         Min(iceFields.ufrag.length, kMaxStunIdentifierLength));
+  client->remoteUser.length = iceFields.ufrag.length;
+  memcpy(client->remoteUserPassword.identifier, iceFields.password.value,
+         Min(iceFields.password.length, kMaxStunIdentifierLength));
+
+  int bodyLength = 0;
+  const char* body = GenerateSDP(
+      wu->arena, wu->cert->fingerprint, wu->conf->host, wu->conf->port,
+      (char*)client->serverUser.identifier, client->serverUser.length,
+      (char*)client->serverPassword.identifier, client->serverPassword.length,
+      &iceFields, &bodyLength);
+  wu->writeSignallingData((const uint8_t*)body, bodyLength, client,
+                          wu->userData);
+  return {WuSDPStatus_Success, client};
+}
+
+void WuHostSetUserData(WuHost* wu, void* userData) { wu->userData = userData; }
+
+void WuHandleUDP(WuHost* wu, const uint8_t* data, int32_t length) {
+
 }
