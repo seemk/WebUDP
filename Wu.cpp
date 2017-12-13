@@ -65,30 +65,6 @@ void WuHandleErrno(WuHost* wu, const char* description) {
   WuHandleError(wu, wu->errBuf);
 }
 
-struct WuConnectionBuffer {
-  size_t size = 0;
-  int fd = -1;
-  uint8_t requestBuffer[kMaxHttpRequestLength];
-};
-
-struct WuConnectionBufferPool {
-  WuConnectionBufferPool(size_t n)
-      : pool(WuPoolCreate(sizeof(WuConnectionBuffer), n)) {}
-
-  WuConnectionBuffer* GetBuffer() {
-    WuConnectionBuffer* buffer = (WuConnectionBuffer*)WuPoolAcquire(pool);
-    return buffer;
-  }
-
-  void Reclaim(WuConnectionBuffer* buf) {
-    buf->fd = -1;
-    buf->size = 0;
-    WuPoolRelease(pool, buf);
-  }
-
-  WuPool* pool;
-};
-
 const double kMaxClientTtl = 8.0;
 const double heartbeatInterval = 4.0;
 
@@ -97,7 +73,7 @@ struct WuClient {
   StunUserIdentifier serverPassword;
   StunUserIdentifier remoteUser;
   StunUserIdentifier remoteUserPassword;
-  struct sockaddr_in address;
+  WuAddress address;
   WuClientState state = WuClient_Dead;
   uint16_t localSctpPort = 0;
   uint16_t remoteSctpPort = 0;
@@ -197,15 +173,11 @@ void WuRemoveClient(WuHost* wu, WuClient* client) {
   }
 }
 
-bool SockAddrEqual(const sockaddr_in* a, const sockaddr_in* b) {
-  return a->sin_family == b->sin_family &&
-         a->sin_addr.s_addr == b->sin_addr.s_addr && a->sin_port == b->sin_port;
-}
-
-WuClient* WuHostFindClient(WuHost* wu, const sockaddr_in* address) {
+static WuClient* WuHostFindClient(WuHost* wu, const WuAddress* address) {
   for (int32_t i = 0; i < wu->numClients; i++) {
     WuClient* client = wu->clients[i];
-    if (SockAddrEqual(&client->address, address)) {
+    if (client->address.host == address->host &&
+        client->address.port == address->port) {
       return client;
     }
   }
@@ -419,8 +391,8 @@ void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
   }
 }
 
-void WuHostReceiveDTLSPacket(WuHost* wu, uint8_t* data, size_t length,
-                             sockaddr_in* address) {
+static void WuHostReceiveDTLSPacket(WuHost* wu, const uint8_t* data,
+                                    size_t length, const WuAddress* address) {
   WuClient* client = WuHostFindClient(wu, address);
   if (!client) {
     return;
@@ -453,8 +425,8 @@ void WuHostReceiveDTLSPacket(WuHost* wu, uint8_t* data, size_t length,
   }
 }
 
-void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
-                      const sockaddr_in* address) {
+static void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
+                             const WuAddress* remote) {
   WuClient* client =
       WuHostFindClientByCreds(wu, &packet->serverUser, &packet->remoteUser);
 
@@ -468,10 +440,8 @@ void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
   memcpy(outPacket.transactionId, packet->transactionId,
          kStunTransactionIdLength);
   outPacket.xorMappedAddress.family = Stun_IPV4;
-  outPacket.xorMappedAddress.port =
-      htons(ntohs(address->sin_port) ^ kStunXorMagic);
-  outPacket.xorMappedAddress.address.ipv4 =
-      htonl(ntohl(address->sin_addr.s_addr) ^ kStunCookie);
+  outPacket.xorMappedAddress.port = htons(remote->port ^ kStunXorMagic);
+  outPacket.xorMappedAddress.address.ipv4 = htonl(remote->host ^ kStunCookie);
 
   uint8_t stunResponse[512];
   size_t serializedSize =
@@ -480,8 +450,8 @@ void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
 
   wu->writeUdpData(stunResponse, serializedSize, client, wu->userData);
 
-  client->localSctpPort = ntohs(address->sin_port);
-  client->address = *address;
+  client->localSctpPort = remote->port;
+  client->address = *remote;
 }
 
 void WuHostPurgeDeadClients(WuHost* wu) {
@@ -496,7 +466,7 @@ void WuHostPurgeDeadClients(WuHost* wu) {
   }
 }
 
-int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
+static int32_t WuCryptoInit(WuHost* wu) {
   static bool initDone = false;
 
   if (!initDone) {
@@ -548,7 +518,7 @@ int32_t WuCryptoInit(WuHost* wu, const WuConf* conf) {
   return 1;
 }
 
-int32_t WuInit(WuHost* wu, const WuConf* conf) {
+int32_t WuHostInit(WuHost* wu, const WuConf* conf) {
   memset(wu, 0, sizeof(WuHost));
   wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
   WuArenaInit(wu->arena, 1 << 20);
@@ -560,9 +530,8 @@ int32_t WuInit(WuHost* wu, const WuConf* conf) {
   wu->errorHandler =
       conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
   wu->writeUdpData = WriteNothing;
-  wu->writeSignallingData = WriteNothing;
 
-  if (!WuCryptoInit(wu, conf)) {
+  if (!WuCryptoInit(wu)) {
     WuHandleError(wu, "failed to init crypto");
     return 0;
   }
@@ -611,7 +580,7 @@ void WuHostUpdateClients(WuHost* wu) {
   }
 }
 
-int32_t WuServe(WuHost* wu, WuEvent* evt) {
+int32_t WuHostUpdate(WuHost* wu, WuEvent* evt) {
   if (WuQueuePop(wu->pendingEvents, evt)) {
     return 1;
   }
@@ -662,16 +631,16 @@ int32_t WuSendBinary(WuHost* wu, WuClient* client, const uint8_t* data,
   return WuSendData(wu, client, data, length, DCProto_Binary);
 }
 
-SDPResult WuHandleSDP(WuHost* wu, const char* sdp, int32_t length) {
+SDPResult WuExchangeSDP(WuHost* wu, const char* sdp, int32_t length) {
   ICESdpFields iceFields;
   if (!ParseSdp(sdp, length, &iceFields)) {
-    return {WuSDPStatus_InvalidSDP, NULL};
+    return {WuSDPStatus_InvalidSDP, NULL, NULL, 0};
   }
 
   WuClient* client = WuHostNewClient(wu);
 
   if (!client) {
-    return {WuSDPStatus_MaxClients, NULL};
+    return {WuSDPStatus_MaxClients, NULL, NULL, 0};
   }
 
   client->serverUser.length = 4;
@@ -686,19 +655,31 @@ SDPResult WuHandleSDP(WuHost* wu, const char* sdp, int32_t length) {
   memcpy(client->remoteUserPassword.identifier, iceFields.password.value,
          Min(iceFields.password.length, kMaxStunIdentifierLength));
 
-  int bodyLength = 0;
-  const char* body = GenerateSDP(
+  int sdpLength = 0;
+  const char* responseSdp = GenerateSDP(
       wu->arena, wu->cert->fingerprint, wu->conf->host, wu->conf->port,
       (char*)client->serverUser.identifier, client->serverUser.length,
       (char*)client->serverPassword.identifier, client->serverPassword.length,
-      &iceFields, &bodyLength);
-  wu->writeSignallingData((const uint8_t*)body, bodyLength, client,
-                          wu->userData);
-  return {WuSDPStatus_Success, client};
+      &iceFields, &sdpLength);
+  return {WuSDPStatus_Success, client, responseSdp, sdpLength};
 }
 
 void WuHostSetUserData(WuHost* wu, void* userData) { wu->userData = userData; }
 
-void WuHandleUDP(WuHost* wu, const uint8_t* data, int32_t length) {
+void WuHandleUDP(WuHost* wu, const WuAddress* remote, const uint8_t* data,
+                 int32_t length) {
+  StunPacket stunPacket;
+  if (ParseStun(data, length, &stunPacket)) {
+    WuHostHandleStun(wu, &stunPacket, remote);
+  } else {
+    WuHostReceiveDTLSPacket(wu, data, length, remote);
+  }
+}
 
+void WuHostError(WuHost* wu, const char* error) {
+  wu->errorHandler(error, wu->userData);
+}
+
+void WuHostSetUDPWrite(WuHost* wu, WuWriteFn writer) {
+  wu->writeUdpData = writer;
 }

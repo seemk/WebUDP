@@ -7,6 +7,7 @@ find_package(OpenSSL REQUIRED)
 add_library(Wu
   CRC32.cpp
   Wu.cpp
+  WuEpoll.cpp
   WuCert.cpp
   WuArena.cpp
   WuDataChannel.cpp
