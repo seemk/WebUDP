@@ -1,32 +1,22 @@
 #include "Wu.h"
 #include <assert.h>
-#include <errno.h>
-#include <netdb.h>
-#include <netinet/tcp.h>
 #include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/epoll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include "WuArena.h"
 #include "WuCert.h"
 #include "WuClock.h"
 #include "WuDataChannel.h"
-#include "WuHttp.h"
 #include "WuMath.h"
-#include "WuNetwork.h"
 #include "WuPool.h"
 #include "WuQueue.h"
 #include "WuRng.h"
 #include "WuSctp.h"
 #include "WuSdp.h"
 #include "WuStun.h"
-#include "picohttpparser.h"
+
+const double kMaxClientTtl = 8.0;
+const double heartbeatInterval = 4.0;
 
 static void WriteNothing(const uint8_t*, size_t, const WuClient*, void*) {}
 
@@ -38,7 +28,7 @@ enum WuClientState {
   WuClient_DataChannelOpen
 };
 
-const char* WuClientStateString(WuClientState state) {
+static const char* WuClientStateString(WuClientState state) {
   switch (state) {
     case WuClient_Dead:
       return "client-state-dead";
@@ -55,18 +45,9 @@ const char* WuClientStateString(WuClientState state) {
   }
 }
 
-void WuHandleError(WuHost* wu, const char* description) {
+static void WuReportError(WuHost* wu, const char* description) {
   wu->errorHandler(description, wu->userData);
 }
-
-void WuHandleErrno(WuHost* wu, const char* description) {
-  snprintf(wu->errBuf, sizeof(wu->errBuf), "%s: %s", description,
-           strerror(errno));
-  WuHandleError(wu, wu->errBuf);
-}
-
-const double kMaxClientTtl = 8.0;
-const double heartbeatInterval = 4.0;
 
 struct WuClient {
   StunUserIdentifier serverUser;
@@ -94,7 +75,7 @@ void WuClientSetUserData(WuClient* client, void* user) { client->user = user; }
 
 void* WuClientGetUserData(const WuClient* client) { return client->user; }
 
-void WuClientFinish(WuClient* client) {
+static void WuClientFinish(WuClient* client) {
   SSL_free(client->ssl);
   client->ssl = NULL;
   client->inBio = NULL;
@@ -102,7 +83,7 @@ void WuClientFinish(WuClient* client) {
   client->state = WuClient_Dead;
 }
 
-void WuClientStart(const WuHost* wu, WuClient* client) {
+static void WuClientStart(const WuHost* wu, WuClient* client) {
   client->state = WuClient_DTLSHandshake;
   client->remoteSctpPort = 0;
   client->sctpVerificationTag = 0;
@@ -125,10 +106,11 @@ void WuClientStart(const WuHost* wu, WuClient* client) {
   SSL_set_accept_state(client->ssl);
 }
 
-void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
-                const SctpChunk* chunks, int32_t numChunks);
+static void WuSendSctp(const WuHost* wu, WuClient* client,
+                       const SctpPacket* packet, const SctpChunk* chunks,
+                       int32_t numChunks);
 
-WuClient* WuHostNewClient(WuHost* wu) {
+static WuClient* WuHostNewClient(WuHost* wu) {
   WuClient* client = (WuClient*)WuPoolAcquire(wu->clientPool);
 
   if (client) {
@@ -141,11 +123,11 @@ WuClient* WuHostNewClient(WuHost* wu) {
   return NULL;
 }
 
-void WuHostPushEvent(WuHost* wu, WuEvent evt) {
+static void WuHostPushEvent(WuHost* wu, WuEvent evt) {
   WuQueuePush(wu->pendingEvents, &evt);
 }
 
-void WuSendSctpShutdown(WuHost* wu, WuClient* client) {
+static void WuSendSctpShutdown(WuHost* wu, WuClient* client) {
   SctpPacket response;
   response.sourcePort = client->localSctpPort;
   response.destionationPort = client->remoteSctpPort;
@@ -185,8 +167,9 @@ static WuClient* WuHostFindClient(WuHost* wu, const WuAddress* address) {
   return NULL;
 }
 
-WuClient* WuHostFindClientByCreds(WuHost* wu, const StunUserIdentifier* svUser,
-                                  const StunUserIdentifier* clUser) {
+static WuClient* WuHostFindClientByCreds(WuHost* wu,
+                                         const StunUserIdentifier* svUser,
+                                         const StunUserIdentifier* clUser) {
   for (int32_t i = 0; i < wu->numClients; i++) {
     WuClient* client = wu->clients[i];
     if (StunUserIdentifierEqual(&client->serverUser, svUser) &&
@@ -198,7 +181,7 @@ WuClient* WuHostFindClientByCreds(WuHost* wu, const StunUserIdentifier* svUser,
   return NULL;
 }
 
-void WuClientSendPendingDTLS(const WuHost* wu, WuClient* client) {
+static void WuClientSendPendingDTLS(const WuHost* wu, WuClient* client) {
   uint8_t sendBuffer[4096];
 
   while (BIO_ctrl_pending(client->outBio) > 0) {
@@ -209,8 +192,8 @@ void WuClientSendPendingDTLS(const WuHost* wu, WuClient* client) {
   }
 }
 
-void TLSSend(const WuHost* wu, WuClient* client, const void* data,
-             int32_t length) {
+static void TLSSend(const WuHost* wu, WuClient* client, const void* data,
+                    int32_t length) {
   if (client->state < WuClient_DTLSHandshake ||
       !SSL_is_init_finished(client->ssl)) {
     return;
@@ -220,8 +203,9 @@ void TLSSend(const WuHost* wu, WuClient* client, const void* data,
   WuClientSendPendingDTLS(wu, client);
 }
 
-void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
-                const SctpChunk* chunks, int32_t numChunks) {
+static void WuSendSctp(const WuHost* wu, WuClient* client,
+                       const SctpPacket* packet, const SctpChunk* chunks,
+                       int32_t numChunks) {
   uint8_t outBuffer[4096];
   memset(outBuffer, 0, sizeof(outBuffer));
   size_t bytesWritten = SerializeSctpPacket(packet, chunks, numChunks,
@@ -229,8 +213,8 @@ void WuSendSctp(const WuHost* wu, WuClient* client, const SctpPacket* packet,
   TLSSend(wu, client, outBuffer, bytesWritten);
 }
 
-void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
-                      int32_t len) {
+static void WuHostHandleSctp(WuHost* wu, WuClient* client, const uint8_t* buf,
+                             int32_t len) {
   const size_t maxChunks = 8;
   SctpChunk chunks[maxChunks];
   SctpPacket sctpPacket;
@@ -440,8 +424,9 @@ static void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
   memcpy(outPacket.transactionId, packet->transactionId,
          kStunTransactionIdLength);
   outPacket.xorMappedAddress.family = Stun_IPV4;
-  outPacket.xorMappedAddress.port = htons(remote->port ^ kStunXorMagic);
-  outPacket.xorMappedAddress.address.ipv4 = htonl(remote->host ^ kStunCookie);
+  outPacket.xorMappedAddress.port = ByteSwap(remote->port ^ kStunXorMagic);
+  outPacket.xorMappedAddress.address.ipv4 =
+      ByteSwap(remote->host ^ kStunCookie);
 
   uint8_t stunResponse[512];
   size_t serializedSize =
@@ -454,7 +439,7 @@ static void WuHostHandleStun(WuHost* wu, const StunPacket* packet,
   client->address = *remote;
 }
 
-void WuHostPurgeDeadClients(WuHost* wu) {
+static void WuHostPurgeDeadClients(WuHost* wu) {
   for (int32_t i = 0; i < wu->numClients; i++) {
     WuClient* client = wu->clients[i];
     if (client->ttl <= 0.0 || client->state == WuClient_WaitingRemoval) {
@@ -532,7 +517,7 @@ int32_t WuHostInit(WuHost* wu, const WuConf* conf) {
   wu->writeUdpData = WriteNothing;
 
   if (!WuCryptoInit(wu)) {
-    WuHandleError(wu, "failed to init crypto");
+    WuReportError(wu, "failed to init crypto");
     return 0;
   }
 
@@ -545,7 +530,7 @@ int32_t WuHostInit(WuHost* wu, const WuConf* conf) {
   return 1;
 }
 
-void WuSendHeartbeat(WuHost* wu, WuClient* client) {
+static void WuSendHeartbeat(WuHost* wu, WuClient* client) {
   SctpPacket packet;
   packet.sourcePort = wu->port;
   packet.destionationPort = client->remoteSctpPort;
@@ -561,7 +546,7 @@ void WuSendHeartbeat(WuHost* wu, WuClient* client) {
   WuSendSctp(wu, client, &packet, &rc, 1);
 }
 
-void WuHostUpdateClients(WuHost* wu) {
+static void WuHostUpdateClients(WuHost* wu) {
   double t = MsNow() * 0.001;
   wu->dt = t - wu->time;
   wu->time = t;
@@ -593,7 +578,7 @@ int32_t WuHostUpdate(WuHost* wu, WuEvent* evt) {
   return 0;
 }
 
-int32_t WuSendData(WuHost* wu, WuClient* client, const uint8_t* data,
+static int32_t WuSendData(WuHost* wu, WuClient* client, const uint8_t* data,
                    int32_t length, DataChanProtoIdentifier proto) {
   if (client->state < WuClient_DataChannelOpen) {
     return -1;
