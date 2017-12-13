@@ -18,7 +18,7 @@ struct ICESdpFields {
 bool ParseSdp(const char* sdp, size_t len, ICESdpFields* fields);
 
 const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
-                        const char* serverIp, const char* serverPort,
+                        const char* serverIp, uint16_t serverPort,
                         const char* ufrag, int32_t ufragLen, const char* pass,
                         int32_t passLen, const ICESdpFields* remote,
                         int* outLength);

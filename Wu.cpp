@@ -503,14 +503,16 @@ static int32_t WuCryptoInit(WuHost* wu) {
   return 1;
 }
 
-int32_t WuHostInit(WuHost* wu, const WuConf* conf) {
+int32_t WuInit(WuHost* wu, const WuConf* conf) {
   memset(wu, 0, sizeof(WuHost));
   wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
   WuArenaInit(wu->arena, 1 << 20);
 
   wu->time = MsNow() * 0.001;
   wu->dt = 0.0;
+  strncpy(wu->host, conf->host, sizeof(wu->host));
   wu->port = atoi(conf->port);
+  wu->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
 
   wu->errorHandler =
       conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
@@ -521,7 +523,6 @@ int32_t WuHostInit(WuHost* wu, const WuConf* conf) {
     return 0;
   }
 
-  wu->conf = conf;
   wu->maxClients = conf->maxClients <= 0 ? 256 : conf->maxClients;
   wu->numClients = 0;
   wu->clientPool = WuPoolCreate(sizeof(WuClient), wu->maxClients);
@@ -579,7 +580,7 @@ int32_t WuHostUpdate(WuHost* wu, WuEvent* evt) {
 }
 
 static int32_t WuSendData(WuHost* wu, WuClient* client, const uint8_t* data,
-                   int32_t length, DataChanProtoIdentifier proto) {
+                          int32_t length, DataChanProtoIdentifier proto) {
   if (client->state < WuClient_DataChannelOpen) {
     return -1;
   }
@@ -642,14 +643,14 @@ SDPResult WuExchangeSDP(WuHost* wu, const char* sdp, int32_t length) {
 
   int sdpLength = 0;
   const char* responseSdp = GenerateSDP(
-      wu->arena, wu->cert->fingerprint, wu->conf->host, wu->conf->port,
+      wu->arena, wu->cert->fingerprint, wu->host, wu->port,
       (char*)client->serverUser.identifier, client->serverUser.length,
       (char*)client->serverPassword.identifier, client->serverPassword.length,
       &iceFields, &sdpLength);
   return {WuSDPStatus_Success, client, responseSdp, sdpLength};
 }
 
-void WuHostSetUserData(WuHost* wu, void* userData) { wu->userData = userData; }
+void WuSetUserData(WuHost* wu, void* userData) { wu->userData = userData; }
 
 void WuHandleUDP(WuHost* wu, const WuAddress* remote, const uint8_t* data,
                  int32_t length) {
@@ -668,3 +669,5 @@ void WuHostError(WuHost* wu, const char* error) {
 void WuHostSetUDPWrite(WuHost* wu, WuWriteFn writer) {
   wu->writeUdpData = writer;
 }
+
+WuAddress WuClientGetAddress(const WuClient* client) { return client->address; }

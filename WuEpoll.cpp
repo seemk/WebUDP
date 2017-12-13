@@ -38,11 +38,14 @@ static void WriteUDPData(const uint8_t* data, size_t length,
                          const WuClient* client, void* userData) {
   WuEpoll* ctx = (WuEpoll*)userData;
 
-  // TODO: Get client address
-  struct sockaddr_in address;
+  WuAddress address = WuClientGetAddress(client);
+  struct sockaddr_in netaddr;
+  netaddr.sin_family = AF_INET;
+  netaddr.sin_port = htons(address.port);
+  netaddr.sin_addr.s_addr = htonl(address.host);
 
-  int ret = sendto(ctx->udpfd, data, length, 0, (struct sockaddr*)&address,
-                   sizeof(address));
+  int ret = sendto(ctx->udpfd, data, length, 0, (struct sockaddr*)&netaddr,
+                   sizeof(netaddr));
   (void)ret;
 }
 
@@ -297,9 +300,11 @@ int32_t WuEpollInit(WuEpoll* ctx, const WuConf* conf) {
   ctx->events = (struct epoll_event*)calloc(ctx->maxEvents, sizeof(event));
   ctx->host = (WuHost*)calloc(1, sizeof(WuHost));
 
-  if (!WuHostInit(ctx->host, conf)) {
+  if (!WuInit(ctx->host, conf)) {
     return 0;
   }
+
+  WuSetUserData(ctx->host, ctx);
 
   WuHostSetUDPWrite(ctx->host, WriteUDPData);
 
@@ -316,11 +321,11 @@ void WuHostRemoveClient(WuEpoll* wu, WuClient* client) {
 }
 
 int32_t WuHostSendText(WuEpoll* host, WuClient* client, const char* text,
-                   int32_t length) {
+                       int32_t length) {
   return WuSendText(host->host, client, text, length);
 }
 
 int32_t WuHostSendBinary(WuEpoll* host, WuClient* client, const uint8_t* data,
-                     int32_t length) {
+                         int32_t length) {
   return WuSendBinary(host->host, client, data, length);
 }

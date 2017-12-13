@@ -57,6 +57,7 @@ struct WuHost {
   WuArena* arena;
   double time;
   double dt;
+  char host[256];
   uint16_t port;
   WuQueue* pendingEvents;
   int32_t maxClients;
@@ -68,15 +69,13 @@ struct WuHost {
 
   ssl_ctx_st* sslCtx;
 
-  const WuConf* conf;
-
   char errBuf[512];
   void* userData;
   WuErrorFn errorHandler;
   WuWriteFn writeUdpData;
 };
 
-int32_t WuHostInit(WuHost* wu, const WuConf* conf);
+int32_t WuInit(WuHost* wu, const WuConf* conf);
 int32_t WuHostUpdate(WuHost* wu, WuEvent* evt);
 void WuHostError(WuHost* wu, const char* error);
 int32_t WuSendText(WuHost* wu, WuClient* client, const char* text,
@@ -89,4 +88,5 @@ void* WuClientGetUserData(const WuClient* client);
 SDPResult WuExchangeSDP(WuHost* wu, const char* sdp, int32_t length);
 void WuHandleUDP(WuHost* wu, const WuAddress* remote, const uint8_t* data, int32_t length);
 void WuHostSetUDPWrite(WuHost* wu, WuWriteFn writer);
-void WuHostSetUserData(WuHost* wu, void* userData);
+void WuSetUserData(WuHost* wu, void* userData);
+WuAddress WuClientGetAddress(const WuClient* client);
