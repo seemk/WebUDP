@@ -7,11 +7,9 @@ find_package(OpenSSL REQUIRED)
 add_library(Wu
   CRC32.cpp
   Wu.cpp
-  WuEpoll.cpp
   WuCert.cpp
   WuArena.cpp
   WuDataChannel.cpp
-  WuNetwork.cpp
   WuPool.cpp
   WuSctp.cpp
   WuSdp.cpp
@@ -23,11 +21,22 @@ add_library(Wu
   picohttpparser.c
 )
 
+add_library(WuHost
+  WuHost.cpp
+  WuNetwork.cpp
+)
+
 target_include_directories(Wu
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>
   PRIVATE OpenSSL::SSL
+)
+
+target_include_directories(WuHost
+  PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(Wu
@@ -36,6 +45,8 @@ target_link_libraries(Wu
   PRIVATE Threads::Threads
 )
 
+target_link_libraries(WuHost Wu)
+
 target_compile_options(Wu
   PRIVATE
   -Wall
@@ -43,7 +54,19 @@ target_compile_options(Wu
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
-install(TARGETS Wu EXPORT WuTargets
+target_compile_options(WuHost
+  PRIVATE
+  -Wall
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+  $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+)
+
+target_compile_definitions(WuHost
+  PUBLIC
+  WU_EPOLL=1
+)
+
+install(TARGETS Wu WuHost EXPORT WuTargets
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
@@ -51,7 +74,7 @@ install(TARGETS Wu EXPORT WuTargets
   PUBLIC_HEADER DESTINATION include
 )
 
-install(FILES Wu.h DESTINATION include)
+install(FILES Wu.h WuHost.h DESTINATION include)
 
 install(EXPORT WuTargets
   FILE WuTargets.cmake
@@ -60,8 +83,8 @@ install(EXPORT WuTargets
 )
 
 add_executable(EchoServer examples/EchoServer.cpp)
-target_link_libraries(EchoServer Wu)
+target_link_libraries(EchoServer WuHost)
 
-set_target_properties(Wu EchoServer PROPERTIES
+set_target_properties(Wu WuHost EchoServer PROPERTIES
   CXX_STANDARD 11
 )

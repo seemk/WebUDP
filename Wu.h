@@ -53,7 +53,7 @@ struct WuConf {
   WuErrorFn errorHandler;
 };
 
-struct WuHost {
+struct Wu {
   WuArena* arena;
   double time;
   double dt;
@@ -75,18 +75,18 @@ struct WuHost {
   WuWriteFn writeUdpData;
 };
 
-int32_t WuInit(WuHost* wu, const WuConf* conf);
-int32_t WuHostUpdate(WuHost* wu, WuEvent* evt);
-void WuHostError(WuHost* wu, const char* error);
-int32_t WuSendText(WuHost* wu, WuClient* client, const char* text,
-                   int32_t length);
-int32_t WuSendBinary(WuHost* wu, WuClient* client, const uint8_t* data,
+int32_t WuInit(Wu* wu, const WuConf* conf);
+int32_t WuUpdate(Wu* wu, WuEvent* evt);
+void WuReportError(Wu* wu, const char* error);
+int32_t WuSendText(Wu* wu, WuClient* client, const char* text, int32_t length);
+int32_t WuSendBinary(Wu* wu, WuClient* client, const uint8_t* data,
                      int32_t length);
-void WuRemoveClient(WuHost* wu, WuClient* client);
+void WuRemoveClient(Wu* wu, WuClient* client);
 void WuClientSetUserData(WuClient* client, void* user);
 void* WuClientGetUserData(const WuClient* client);
-SDPResult WuExchangeSDP(WuHost* wu, const char* sdp, int32_t length);
-void WuHandleUDP(WuHost* wu, const WuAddress* remote, const uint8_t* data, int32_t length);
-void WuHostSetUDPWrite(WuHost* wu, WuWriteFn writer);
-void WuSetUserData(WuHost* wu, void* userData);
+SDPResult WuExchangeSDP(Wu* wu, const char* sdp, int32_t length);
+void WuHandleUDP(Wu* wu, const WuAddress* remote, const uint8_t* data,
+                 int32_t length);
+void WuSetUDPWriteFunction(Wu* wu, WuWriteFn write);
+void WuSetUserData(Wu* wu, void* userData);
 WuAddress WuClientGetAddress(const WuClient* client);
