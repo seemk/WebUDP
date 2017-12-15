@@ -16,13 +16,15 @@ int main(int argc, char** argv) {
     conf.port = "9555";
   }
 
-  conf.errorHandler = [](const char* e, void*) { printf("%s\n", e); };
-
   WuHost* host = WuHostCreate(&conf);
   if (!host) {
     printf("init fail\n");
     return 1;
   }
+
+  WuHostSetErrorCallback(host, [](const char* err, void*) {
+    printf("error: %s\n", err);
+  });
 
   // TODO: Set blocking
   // The default mode is non-blocking.

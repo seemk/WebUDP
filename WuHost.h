@@ -12,3 +12,4 @@ int32_t WuHostSendText(WuHost* host, WuClient* client, const char* text,
                        int32_t length);
 int32_t WuHostSendBinary(WuHost* host, WuClient* client, const uint8_t* data,
                          int32_t length);
+void WuHostSetErrorCallback(WuHost* host, WuErrorFn callback);

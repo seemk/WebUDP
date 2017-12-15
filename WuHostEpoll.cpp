@@ -344,3 +344,7 @@ WuHost* WuHostCreate(const WuConf* conf) {
 
   return host;
 }
+
+void WuHostSetErrorCallback(WuHost* host, WuErrorFn callback) {
+  WuSetErrorCallback(host->wu, callback);
+}

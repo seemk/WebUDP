@@ -50,7 +50,6 @@ struct WuConf {
   const char* host;
   const char* port;
   int maxClients;
-  WuErrorFn errorHandler;
 };
 
 struct Wu {
@@ -71,7 +70,7 @@ struct Wu {
 
   char errBuf[512];
   void* userData;
-  WuErrorFn errorHandler;
+  WuErrorFn errorCallback;
   WuWriteFn writeUdpData;
 };
 
@@ -89,4 +88,5 @@ void WuHandleUDP(Wu* wu, const WuAddress* remote, const uint8_t* data,
                  int32_t length);
 void WuSetUDPWriteFunction(Wu* wu, WuWriteFn write);
 void WuSetUserData(Wu* wu, void* userData);
+void WuSetErrorCallback(Wu* wu, WuErrorFn callback);
 WuAddress WuClientGetAddress(const WuClient* client);

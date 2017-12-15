@@ -18,6 +18,7 @@
 const double kMaxClientTtl = 8.0;
 const double heartbeatInterval = 4.0;
 
+static void DefaultErrorCallback(const char*, void*) {}
 static void WriteNothing(const uint8_t*, size_t, const WuClient*, void*) {}
 
 enum WuClientState {
@@ -46,7 +47,7 @@ static const char* WuClientStateString(WuClientState state) {
 }
 
 void WuReportError(Wu* wu, const char* description) {
-  wu->errorHandler(description, wu->userData);
+  wu->errorCallback(description, wu->userData);
 }
 
 struct WuClient {
@@ -511,8 +512,7 @@ int32_t WuInit(Wu* wu, const WuConf* conf) {
   wu->port = atoi(conf->port);
   wu->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
 
-  wu->errorHandler =
-      conf->errorHandler ? conf->errorHandler : [](const char*, void*) {};
+  wu->errorCallback = DefaultErrorCallback;
   wu->writeUdpData = WriteNothing;
 
   if (!WuCryptoInit(wu)) {
@@ -663,3 +663,11 @@ void WuSetUDPWriteFunction(Wu* wu, WuWriteFn write) {
 }
 
 WuAddress WuClientGetAddress(const WuClient* client) { return client->address; }
+
+void WuSetErrorCallback(Wu* wu, WuErrorFn callback) {
+  if (callback) {
+    wu->errorCallback = callback;
+  } else {
+    wu->errorCallback = DefaultErrorCallback;
+  }
+}
