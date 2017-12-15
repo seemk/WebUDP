@@ -1,10 +1,7 @@
 #pragma once
 #include <stdint.h>
+#include "Wu.h"
 
-struct Wu;
-struct WuConf;
-struct WuEvent;
-struct WuClient;
 struct WuHost;
 
 WuHost* WuHostCreate(const WuConf* conf);

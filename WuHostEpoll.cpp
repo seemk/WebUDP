@@ -1,12 +1,6 @@
-#include "WuHost.h"
-#include "Wu.h"
-#include <assert.h>
 #include <errno.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
-#include <openssl/ec.h>
-#include <openssl/err.h>
-#include <openssl/ssl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,19 +8,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "Wu.h"
-#include "WuArena.h"
-#include "WuCert.h"
-#include "WuClock.h"
+#include "WuHost.h"
 #include "WuHttp.h"
 #include "WuMath.h"
 #include "WuNetwork.h"
 #include "WuPool.h"
-#include "WuQueue.h"
 #include "WuRng.h"
-#include "WuSctp.h"
-#include "WuSdp.h"
-#include "WuStun.h"
+#include "WuString.h"
 #include "picohttpparser.h"
 
 struct WuConnectionBuffer {
@@ -87,7 +75,6 @@ static void WriteUDPData(const uint8_t* data, size_t length,
   (void)ret;
 }
 
-
 static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
   for (;;) {
     ssize_t count = read(conn->fd, conn->requestBuffer + conn->size,
@@ -138,18 +125,19 @@ static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
             SocketWrite(conn->fd, STRLIT(HTTP_UNAVAILABLE));
           } else if (sdp.status == WuSDPStatus_InvalidSDP) {
             SocketWrite(conn->fd, STRLIT(HTTP_BAD_REQUEST));
+          } else {
+            char response[4096];
+            int responseLength = snprintf(response, 4096,
+                                          "HTTP/1.1 200 OK\r\n"
+                                          "Content-Type: application/json\r\n"
+                                          "Content-Length: %d\r\n"
+                                          "Connection: close\r\n"
+                                          "Access-Control-Allow-Origin: *\r\n"
+                                          "\r\n%s",
+                                          sdp.sdpLength, sdp.sdp);
+            SocketWrite(conn->fd, response, responseLength);
           }
 
-          char response[4096];
-          int responseLength = snprintf(response, 4096,
-                                        "HTTP/1.1 200 OK\r\n"
-                                        "Content-Type: application/json\r\n"
-                                        "Content-Length: %d\r\n"
-                                        "Connection: close\r\n"
-                                        "Access-Control-Allow-Origin: *\r\n"
-                                        "\r\n%s",
-                                        sdp.sdpLength, sdp.sdp);
-          SocketWrite(conn->fd, response, responseLength);
           close(conn->fd);
           host->bufferPool->Reclaim(conn);
         }
@@ -178,7 +166,8 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
     return hres;
   }
 
-  int n = epoll_wait(host->epfd, host->events, host->maxEvents, host->pollTimeout);
+  int n =
+      epoll_wait(host->epfd, host->events, host->maxEvents, host->pollTimeout);
 
   WuConnectionBufferPool* pool = host->bufferPool;
   for (int i = 0; i < n; i++) {
@@ -347,7 +336,7 @@ int32_t WuHostSendBinary(WuHost* host, WuClient* client, const uint8_t* data,
 
 WuHost* WuHostCreate(const WuConf* conf) {
   WuHost* host = (WuHost*)calloc(1, sizeof(WuHost));
-  
+
   if (!WuHostInit(host, conf)) {
     free(host);
     return NULL;
