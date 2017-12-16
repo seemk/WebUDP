@@ -29,23 +29,6 @@ enum WuClientState {
   WuClient_DataChannelOpen
 };
 
-static const char* WuClientStateString(WuClientState state) {
-  switch (state) {
-    case WuClient_Dead:
-      return "client-state-dead";
-    case WuClient_WaitingRemoval:
-      return "client-state-waitremove";
-    case WuClient_DTLSHandshake:
-      return "client-state-dtls-handshake";
-    case WuClient_SCTPEstablished:
-      return "client-state-sctp-established";
-    case WuClient_DataChannelOpen:
-      return "client-state-datachannel-open";
-    default:
-      return "client-state-invalid";
-  }
-}
-
 void WuReportError(Wu* wu, const char* description) {
   wu->errorCallback(description, wu->userData);
 }
