@@ -6,7 +6,10 @@
 
 enum SdpParseState { kParseIgnore, kParseType, kParseEq, kParseField };
 
-bool BeginsWith(const char* s, size_t len, const char* prefix, size_t plen) {
+static bool ValidField(const IceField* field) { return field->length > 0; }
+
+static bool BeginsWith(const char* s, size_t len, const char* prefix,
+                       size_t plen) {
   if (plen > len) return false;
 
   for (size_t i = 0; i < plen; i++) {
@@ -19,7 +22,8 @@ bool BeginsWith(const char* s, size_t len, const char* prefix, size_t plen) {
   return true;
 }
 
-bool GetIceValue(const char* field, size_t len, const char* name, IceField* o) {
+static bool GetIceValue(const char* field, size_t len, const char* name,
+                        IceField* o) {
   if (BeginsWith(field, len, name, strlen(name))) {
     for (size_t i = 0; i < len; i++) {
       char c = field[i];
@@ -39,7 +43,7 @@ bool GetIceValue(const char* field, size_t len, const char* name, IceField* o) {
   return false;
 }
 
-void ParseSdpField(const char* field, size_t len, ICESdpFields* fields) {
+static void ParseSdpField(const char* field, size_t len, ICESdpFields* fields) {
   GetIceValue(field, len, "ice-ufrag", &fields->ufrag);
   GetIceValue(field, len, "ice-pwd", &fields->password);
   GetIceValue(field, len, "mid", &fields->mid);
@@ -96,7 +100,8 @@ bool ParseSdp(const char* sdp, size_t len, ICESdpFields* fields) {
     }
   }
 
-  return true;
+  return ValidField(&fields->ufrag) && ValidField(&fields->password) &&
+         ValidField(&fields->mid);
 }
 
 const char* GenerateSDP(WuArena* arena, const char* certFingerprint,
