@@ -414,10 +414,10 @@ static void WuHandleStun(Wu* wu, const StunPacket* packet,
       SerializeStunPacket(&outPacket, client->serverPassword.identifier,
                           client->serverPassword.length, stunResponse, 512);
 
-  wu->writeUdpData(stunResponse, serializedSize, client, wu->userData);
-
   client->localSctpPort = remote->port;
   client->address = *remote;
+
+  wu->writeUdpData(stunResponse, serializedSize, client, wu->userData);
 }
 
 static void WuPurgeDeadClients(Wu* wu) {
