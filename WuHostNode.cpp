@@ -174,6 +174,7 @@ NAN_MODULE_INIT(WuHostWrap::Init) {
   Nan::SetPrototypeMethod(tpl, "onBinaryData", SetBinaryDataReceivedFunction);
   Nan::SetPrototypeMethod(tpl, "removeClient", RemoveClient);
   Nan::SetPrototypeMethod(tpl, "sendText", SendTextData);
+  Nan::SetPrototypeMethod(tpl, "sendBinary", SendBinaryData);
 
   constructor.Reset(tpl->GetFunction());
   Nan::Set(target, Nan::New("Host").ToLocalChecked(),
@@ -387,7 +388,25 @@ NAN_METHOD(WuHostWrap::SendTextData) {
 }
 
 NAN_METHOD(WuHostWrap::SendBinaryData) {
-  // TODO
+  if (info.Length() < 2) {
+    Nan::ThrowError(kInvalidArguments);
+    return;
+  }
+
+  uint32_t clientId = info[0]->Uint32Value();
+
+  WuHostWrap* obj = Nan::ObjectWrap::Unwrap<WuHostWrap>(info.This());
+  if (obj->clients.count(clientId) == 0) {
+    return;
+  }
+
+  WuClient* client = obj->clients[clientId];
+
+  auto buf = info[1]->ToObject();
+  char* data = node::Buffer::Data(buf);
+  size_t length = node::Buffer::Length(buf);
+
+  WuSendBinary(obj->host.wu, client, (uint8_t*)data, length);
 }
 
 NAN_MODULE_INIT(Init) { WuHostWrap::Init(target); }
