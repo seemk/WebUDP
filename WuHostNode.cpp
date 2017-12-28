@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <nan.h>
+#include <unordered_map>
 #include "WuHost.h"
 
 const char* const kInvalidArgumentCountErr = "Wrong number of arguments";
@@ -38,9 +39,12 @@ class WuHostWrap : public Nan::ObjectWrap {
   static NAN_METHOD(SetTextDataReceivedFunction);
   static NAN_METHOD(SetBinaryDataReceivedFunction);
   static NAN_METHOD(RemoveClient);
+  static NAN_METHOD(SendTextData);
+  static NAN_METHOD(SendBinaryData);
   static Nan::Persistent<v8::Function> constructor;
 
-  uint64_t idCounter = 1;
+  std::unordered_map<uint32_t, WuClient*> clients;
+  uint32_t idCounter = 1;
   WuHost host;
   Nan::Callback udpWriteCallback;
   Nan::Callback clientJoinCallback;
@@ -51,14 +55,17 @@ class WuHostWrap : public Nan::ObjectWrap {
   void HandleClientJoin(WuClient* client);
   void HandleClientLeave(WuClient* client);
   void HandleContent(const WuEvent* evt);
+
+  void RemoveClient(uint32_t id);
 };
 
 void WuHostWrap::HandleClientJoin(WuClient* client) {
-  uintptr_t id = (uintptr_t)WuClientGetUserData(client);
+  uint32_t id = (uint32_t)(uintptr_t)WuClientGetUserData(client);
 
   if (!id) {
     id = idCounter++;
-    WuClientSetUserData(client, (void*)id);
+    WuClientSetUserData(client, (void*)(uintptr_t)id);
+    clients[id] = client;
   }
 
   WuAddress address = WuClientGetAddress(client);
@@ -68,7 +75,7 @@ void WuHostWrap::HandleClientJoin(WuClient* client) {
   Nan::Set(args, Nan::New("address").ToLocalChecked(),
            Nan::New(remote.textAddress).ToLocalChecked());
   Nan::Set(args, Nan::New("port").ToLocalChecked(), Nan::New(remote.port));
-  Nan::Set(args, Nan::New("clientId").ToLocalChecked(), Nan::New((uint32_t)id));
+  Nan::Set(args, Nan::New("clientId").ToLocalChecked(), Nan::New(id));
 
   const int argc = 1;
   v8::Local<v8::Value> argv[argc] = {args};
@@ -142,6 +149,14 @@ void WriteUDPData(const uint8_t* data, size_t length, const WuClient* client,
   wrap->udpWriteCallback.Call(argc, argv);
 }
 
+void WuHostWrap::RemoveClient(uint32_t id) {
+  if (clients.count(id) > 0) {
+    WuClient* client = clients[id];
+    clients.erase(id);
+    WuRemoveClient(host.wu, client);
+  }
+}
+
 Nan::Persistent<v8::Function> WuHostWrap::constructor;
 
 NAN_MODULE_INIT(WuHostWrap::Init) {
@@ -157,6 +172,8 @@ NAN_MODULE_INIT(WuHostWrap::Init) {
   Nan::SetPrototypeMethod(tpl, "onClientLeave", SetClientLeaveFunction);
   Nan::SetPrototypeMethod(tpl, "onTextData", SetTextDataReceivedFunction);
   Nan::SetPrototypeMethod(tpl, "onBinaryData", SetBinaryDataReceivedFunction);
+  Nan::SetPrototypeMethod(tpl, "removeClient", RemoveClient);
+  Nan::SetPrototypeMethod(tpl, "sendText", SendTextData);
 
   constructor.Reset(tpl->GetFunction());
   Nan::Set(target, Nan::New("Host").ToLocalChecked(),
@@ -266,6 +283,8 @@ NAN_METHOD(WuHostWrap::HandleUDP) {
   remote.port = port;
 
   WuHandleUDP(wu, &remote, (const uint8_t*)data, length);
+
+  WuHostWrap::Serve(info);
 }
 
 NAN_METHOD(WuHostWrap::Serve) {
@@ -286,6 +305,7 @@ NAN_METHOD(WuHostWrap::Serve) {
       }
       case WuEvent_ClientLeave: {
         obj->HandleClientLeave(evt.client);
+        break;
       }
       default:
         break;
@@ -334,6 +354,40 @@ NAN_METHOD(WuHostWrap::SetTextDataReceivedFunction) {
 
   WuHostWrap* obj = Nan::ObjectWrap::Unwrap<WuHostWrap>(info.This());
   obj->textDataCallback.Reset(Nan::To<v8::Function>(info[0]).ToLocalChecked());
+}
+
+NAN_METHOD(WuHostWrap::RemoveClient) {
+  if (info.Length() < 1 || !info[0]->IsNumber()) {
+    Nan::ThrowError(kInvalidArguments);
+    return;
+  }
+
+  WuHostWrap* obj = Nan::ObjectWrap::Unwrap<WuHostWrap>(info.This());
+  uint32_t id = info[0]->Uint32Value();
+  obj->RemoveClient(id);
+}
+
+NAN_METHOD(WuHostWrap::SendTextData) {
+  if (info.Length() < 2 || !info[1]->IsString()) {
+    Nan::ThrowError(kInvalidArguments);
+    return;
+  }
+
+  uint32_t clientId = info[0]->Uint32Value();
+
+  WuHostWrap* obj = Nan::ObjectWrap::Unwrap<WuHostWrap>(info.This());
+  if (obj->clients.count(clientId) == 0) {
+    return;
+  }
+
+  WuClient* client = obj->clients[clientId];
+  v8::String::Utf8Value text(info[1]);
+
+  WuSendText(obj->host.wu, client, *text, text.length());
+}
+
+NAN_METHOD(WuHostWrap::SendBinaryData) {
+  // TODO
 }
 
 NAN_MODULE_INIT(Init) { WuHostWrap::Init(target); }

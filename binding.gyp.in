@@ -2,9 +2,9 @@
   "targets": [
     {
       "target_name": "WebUDP",
-      "sources": ["WuHostNode.cpp"],
+      "sources": ["../WuHostNode.cpp"],
       "link_settings": {
-        "libraries": ["-lWu"]
+        "libraries": ["$<TARGET_FILE:Wu>"]
       },
       "include_dirs": [
         "<!(node -e \"require('nan')\")"
@@ -12,3 +12,4 @@
     }
   ]
 }
+

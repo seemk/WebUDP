@@ -1,4 +1,4 @@
-const WebUDP = require("./build/Release/WebUDP.node");
+const WebUDP = require("./WebUDP.node");
 const express = require("express");
 const cors = require("cors");
 const dgram = require("dgram");
@@ -6,6 +6,7 @@ const dgram = require("dgram");
 const HOST = "127.0.0.1";
 const PORT = 9555;
 
+/* An example how to use the WebUDP node addon. */
 let app = express();
 app.use(cors());
 app.use(require("body-parser").text());
@@ -27,6 +28,7 @@ host.onClientLeave(({clientId}) => {
 
 host.onTextData(({text, clientId, address, port}) => {
   console.log(`received text data from client ${clientId}: ${text}`);
+  host.sendText(clientId, text);
 });
 
 app.post("/", (req, res) => {
@@ -41,7 +43,6 @@ app.post("/", (req, res) => {
 
 udp.on("message", (msg, addr) => {
   host.handleUDP(msg, addr);
-  host.serve();
 });
 
 app.listen(PORT);

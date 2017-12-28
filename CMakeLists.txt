@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.5)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+option(WITH_NODE "Build Node bindings" OFF)
+
+set(EXAMPLES_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples)
+
 add_library(Wu
   CRC32.cpp
   Wu.cpp
@@ -50,6 +54,7 @@ target_link_libraries(WuHost Wu)
 target_compile_options(Wu
   PRIVATE
   -Wall
+  -fPIC
   $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
@@ -61,10 +66,17 @@ target_compile_options(WuHost
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
-target_compile_definitions(WuHost
-  PUBLIC
-  WU_EPOLL=1
-)
+if (LINUX)
+  target_compile_definitions(WuHost
+    PUBLIC
+    WU_EPOLL=1
+  )
+elseif (APPLE)
+  target_compile_definitions(WuHost
+    PUBLIC
+    WU_KQUEUE=1
+  )
+endif()
 
 install(TARGETS Wu WuHost EXPORT WuTargets
   LIBRARY DESTINATION lib
@@ -87,4 +99,40 @@ target_link_libraries(EchoServer WuHost)
 
 set_target_properties(Wu WuHost EchoServer PROPERTIES
   CXX_STANDARD 11
+  RUNTIME_OUTPUT_DIRECTORY ${EXAMPLES_DIR}
 )
+
+file(MAKE_DIRECTORY ${EXAMPLES_DIR})
+
+if (WITH_NODE)
+  find_program(NPM npm)
+
+  if (NPM)
+    file (GENERATE OUTPUT binding.gyp
+      INPUT ${CMAKE_CURRENT_SOURCE_DIR}/binding.gyp.in
+    )
+
+    file (GENERATE OUTPUT package.json
+      INPUT ${CMAKE_CURRENT_SOURCE_DIR}/package.json
+    )
+
+    add_custom_target(node ALL
+      COMMAND npm install
+      COMMAND npm run configure
+      COMMAND npm run build
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+
+    add_custom_command(TARGET node POST_BUILD
+      COMMAND ${CMAKE_COMMAND}
+        -E copy ${CMAKE_CURRENT_BINARY_DIR}/build/Release/WebUDP.node ${EXAMPLES_DIR}
+    )
+
+    add_dependencies(node Wu)
+
+    file(COPY examples/webudp.js DESTINATION ${EXAMPLES_DIR})
+  else()
+    message(WARNING "npm not found, skipping Node bindings")
+  endif()
+
+endif()
