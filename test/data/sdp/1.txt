@@ -1,0 +1,15 @@
+v=0
+o=- 6160395802903482824 2 IN IP4 127.0.0.1
+s=-
+t=0 0
+a=group:BUNDLE data
+a=msid-semantic: WMS
+m=application 56590 DTLS/SCTP 5000
+c=IN IP4 192.168.11.63
+a=candidate:1296453247 1 udp 2113937151 192.168.11.63 56590 typ host generation 0 network-cost 50
+a=ice-ufrag:sHUO
+a=ice-pwd:ub+FiUYhroj8Tqk4BiF6k5xA
+a=fingerprint:sha-256 21:FD:F9:F4:18:A6:1B:CC:15:28:17:2D:56:4C:EE:35:00:B8:F7:2C:DE:C3:C0:85:9E:1E:FF:59:CA:B0:46:29
+a=setup:actpass
+a=mid:data
+a=sctpmap:5000 webrtc-datachannel 1024

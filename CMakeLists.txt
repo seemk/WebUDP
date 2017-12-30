@@ -5,6 +5,7 @@ find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
 option(WITH_NODE "Build Node bindings" OFF)
+option(WITH_TESTS "Build tests" OFF)
 
 set(EXAMPLES_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples)
 
@@ -66,7 +67,7 @@ target_compile_options(WuHost
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
-if (LINUX)
+if (UNIX AND NOT APPLE)
   target_compile_definitions(WuHost
     PUBLIC
     WU_EPOLL=1
@@ -135,4 +136,17 @@ if (WITH_NODE)
     message(WARNING "npm not found, skipping Node bindings")
   endif()
 
+endif()
+
+if (WITH_TESTS)
+  set(TESTS_DIR ${CMAKE_CURRENT_BINARY_DIR}/tests)
+  file(MAKE_DIRECTORY ${TESTS_DIR})
+
+  add_executable(FuzzSdp test/FuzzSdp.cpp)
+  add_executable(FuzzSctp test/FuzzSctp.cpp)
+  add_executable(FuzzStun test/FuzzStun.cpp)
+  target_link_libraries(FuzzSdp Wu)
+  target_link_libraries(FuzzSctp Wu)
+  target_link_libraries(FuzzStun Wu)
+  file(COPY test/data DESTINATION ${TESTS_DIR})
 endif()
