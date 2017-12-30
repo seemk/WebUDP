@@ -6,7 +6,6 @@
 #include "WuArena.h"
 #include "WuCert.h"
 #include "WuClock.h"
-#include "WuDataChannel.h"
 #include "WuMath.h"
 #include "WuPool.h"
 #include "WuQueue.h"
@@ -21,6 +20,28 @@ const double heartbeatInterval = 4.0;
 static void DefaultErrorCallback(const char*, void*) {}
 static void WriteNothing(const uint8_t*, size_t, const WuClient*, void*) {}
 
+enum DataChannelMessageType { DCMessage_Ack = 0x02, DCMessage_Open = 0x03 };
+
+enum DataChanProtoIdentifier {
+  DCProto_Control = 50,
+  DCProto_String = 51,
+  DCProto_Binary = 53,
+  DCProto_EmptyString = 56,
+  DCProto_EmptyBinary = 57
+};
+
+struct DataChannelPacket {
+  uint8_t messageType;
+
+  union {
+    struct {
+      uint8_t channelType;
+      uint16_t priority;
+      uint32_t reliability;
+    } open;
+  } as;
+};
+
 enum WuClientState {
   WuClient_Dead,
   WuClient_WaitingRemoval,
@@ -28,6 +49,12 @@ enum WuClientState {
   WuClient_SCTPEstablished,
   WuClient_DataChannelOpen
 };
+
+static int32_t ParseDataChannelControlPacket(const uint8_t* buf, size_t len,
+                                             DataChannelPacket* packet) {
+  ReadScalarSwapped(buf, &packet->messageType);
+  return 0;
+}
 
 void WuReportError(Wu* wu, const char* description) {
   wu->errorCallback(description, wu->userData);

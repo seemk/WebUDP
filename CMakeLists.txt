@@ -14,7 +14,6 @@ add_library(Wu
   Wu.cpp
   WuCert.cpp
   WuArena.cpp
-  WuDataChannel.cpp
   WuPool.cpp
   WuSctp.cpp
   WuSdp.cpp
@@ -23,12 +22,12 @@ add_library(Wu
   WuCrypto.cpp
   WuRng.cpp
   WuQueue.cpp
-  picohttpparser.c
 )
 
 add_library(WuHost
   WuHost.cpp
   WuNetwork.cpp
+  picohttpparser.c
 )
 
 target_include_directories(Wu

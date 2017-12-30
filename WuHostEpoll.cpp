@@ -70,9 +70,8 @@ static void WriteUDPData(const uint8_t* data, size_t length,
   netaddr.sin_port = htons(address.port);
   netaddr.sin_addr.s_addr = htonl(address.host);
 
-  int ret = sendto(host->udpfd, data, length, 0, (struct sockaddr*)&netaddr,
-                   sizeof(netaddr));
-  (void)ret;
+  sendto(host->udpfd, data, length, 0, (struct sockaddr*)&netaddr,
+         sizeof(netaddr));
 }
 
 static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
