@@ -4,7 +4,6 @@
 
 #include "WuHost.h"
 WuHost* WuHostCreate(const WuConf*) { return NULL; }
-void WuHostSetNonblocking(WuHost*, int32_t) {}
 int32_t WuHostServe(WuHost*, WuEvent*) { return 0; }
 void WuHostRemoveClient(WuHost*, WuClient*) {}
 int32_t WuHostSendText(WuHost*, WuClient*, const char*, int32_t) { return 0; }

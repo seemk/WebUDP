@@ -5,7 +5,6 @@
 struct WuHost;
 
 WuHost* WuHostCreate(const WuConf* conf);
-void WuHostSetNonblocking(WuHost* host, int32_t nonblocking);
 int32_t WuHostServe(WuHost* host, WuEvent* evt);
 void WuHostRemoveClient(WuHost* wu, WuClient* client);
 int32_t WuHostSendText(WuHost* host, WuClient* client, const char* text,

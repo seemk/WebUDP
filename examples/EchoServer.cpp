@@ -26,10 +26,6 @@ int main(int argc, char** argv) {
     printf("error: %s\n", err);
   });
 
-  // TODO: Set blocking
-  // The default mode is non-blocking.
-  // conf.blocking = 1;
-
   for (;;) {
     WuEvent evt;
     while (WuHostServe(host, &evt)) {

@@ -314,12 +314,6 @@ int32_t WuHostInit(WuHost* host, const WuConf* conf) {
   return 1;
 }
 
-void WuHostSetNonblocking(WuHost* host, int32_t nonblocking) {
-  // TODO
-  (void)host;
-  (void)nonblocking;
-}
-
 void WuHostRemoveClient(WuHost* host, WuClient* client) {
   WuRemoveClient(host->wu, client);
 }
