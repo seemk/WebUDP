@@ -27,4 +27,3 @@ struct DataChannelPacket {
 
 int32_t ParseDataChannelControlPacket(const uint8_t* buf, size_t len,
                                       DataChannelPacket* packet);
-const char* DataChannelMessageTypeName(uint8_t type);
