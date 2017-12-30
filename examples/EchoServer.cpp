@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../Wu.h"
 #include "../WuHost.h"
 
 int main(int argc, char** argv) {
