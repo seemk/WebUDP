@@ -47,9 +47,9 @@ struct WuAddress {
 };
 
 struct WuConf {
-  const char* host;
-  const char* port;
-  int maxClients;
+  const char* host = "127.0.0.1";
+  const char* port = "9555";
+  int maxClients = 256;
 };
 
 struct Wu {
