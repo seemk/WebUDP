@@ -12,7 +12,6 @@ set(EXAMPLES_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples)
 add_library(Wu
   CRC32.cpp
   Wu.cpp
-  WuCert.cpp
   WuArena.cpp
   WuPool.cpp
   WuSctp.cpp

@@ -5,7 +5,6 @@
 
 struct WuClient;
 struct WuPool;
-struct WuCert;
 struct WuArena;
 struct WuQueue;
 struct ssl_ctx_st;
@@ -64,9 +63,9 @@ struct Wu {
 
   WuPool* clientPool;
   WuClient** clients;
-  WuCert* cert;
-
   ssl_ctx_st* sslCtx;
+
+  char certFingerprint[96];
 
   char errBuf[512];
   void* userData;

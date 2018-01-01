@@ -4,8 +4,8 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include "WuArena.h"
-#include "WuCert.h"
 #include "WuClock.h"
+#include "WuCrypto.h"
 #include "WuMath.h"
 #include "WuPool.h"
 #include "WuQueue.h"
@@ -485,16 +485,16 @@ static int32_t WuCryptoInit(Wu* wu) {
 
   SSL_CTX_set_verify(wu->sslCtx, SSL_VERIFY_NONE, NULL);
 
-  wu->cert = WuCertNew();
+  WuCert cert;
 
-  sslStatus = SSL_CTX_use_PrivateKey(wu->sslCtx, wu->cert->key);
+  sslStatus = SSL_CTX_use_PrivateKey(wu->sslCtx, cert.key);
 
   if (sslStatus != 1) {
     ERR_print_errors_fp(stderr);
     return 0;
   }
 
-  sslStatus = SSL_CTX_use_certificate(wu->sslCtx, wu->cert->x509);
+  sslStatus = SSL_CTX_use_certificate(wu->sslCtx, cert.x509);
 
   if (sslStatus != 1) {
     ERR_print_errors_fp(stderr);
@@ -507,6 +507,8 @@ static int32_t WuCryptoInit(Wu* wu) {
     ERR_print_errors_fp(stderr);
     return 0;
   }
+
+  memcpy(wu->certFingerprint, cert.fingerprint, sizeof(cert.fingerprint));
 
   return 1;
 }
@@ -649,7 +651,7 @@ SDPResult WuExchangeSDP(Wu* wu, const char* sdp, int32_t length) {
 
   int sdpLength = 0;
   const char* responseSdp = GenerateSDP(
-      wu->arena, wu->cert->fingerprint, wu->host, wu->port,
+      wu->arena, wu->certFingerprint, wu->host, wu->port,
       (char*)client->serverUser.identifier, client->serverUser.length,
       (char*)client->serverPassword.identifier, client->serverPassword.length,
       &iceFields, &sdpLength);
