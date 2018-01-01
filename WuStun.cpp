@@ -3,7 +3,6 @@
 #include <string.h>
 #include "CRC32.h"
 #include "WuCrypto.h"
-#include "WuString.h"
 
 const size_t kStunHeaderLength = 20;
 const int32_t kStunAlignment = 4;

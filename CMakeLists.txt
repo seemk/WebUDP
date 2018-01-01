@@ -23,11 +23,17 @@ add_library(Wu
   WuQueue.cpp
 )
 
-add_library(WuHost
-  WuHost.cpp
-  WuNetwork.cpp
-  picohttpparser.c
-)
+if (UNIX AND NOT APPLE)
+  add_library(WuHost
+    WuHostEpoll.cpp
+    WuNetwork.cpp
+    picohttpparser.c
+  )
+else ()
+  add_library(WuHost
+    WuHostNull.cpp
+  )
+endif()
 
 target_include_directories(Wu
   PUBLIC
@@ -64,18 +70,6 @@ target_compile_options(WuHost
   $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
   $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
-
-if (UNIX AND NOT APPLE)
-  target_compile_definitions(WuHost
-    PUBLIC
-    WU_EPOLL=1
-  )
-elseif (APPLE)
-  target_compile_definitions(WuHost
-    PUBLIC
-    WU_KQUEUE=1
-  )
-endif()
 
 install(TARGETS Wu WuHost EXPORT WuTargets
   LIBRARY DESTINATION lib
