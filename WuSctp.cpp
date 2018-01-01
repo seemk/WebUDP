@@ -7,35 +7,6 @@
 #include "WuMath.h"
 #include "WuNetwork.h"
 
-const char* SctpTypeName(SctpChunkType type) {
-  switch (type) {
-    case Sctp_Data:
-      return "DATA";
-    case Sctp_Init:
-      return "INIT";
-    case Sctp_InitAck:
-      return "INIT_ACK";
-    case Sctp_Sack:
-      return "SACK";
-    case Sctp_Heartbeat:
-      return "HEARTBEAT";
-    case Sctp_HeartbeatAck:
-      return "HEARTBEAT_ACK";
-    case Sctp_Abort:
-      return "ABORT";
-    case Sctp_Shutdown:
-      return "SHUTDOWN";
-    case Sctp_CookieEcho:
-      return "COOKIE ECHO";
-    case Sctp_CookieAck:
-      return "COOKIE ACK";
-    case SctpChunk_ForwardTsn:
-      return "FORWARD TSN";
-    default:
-      return "unhandled";
-  }
-}
-
 int32_t ParseSctpPacket(const uint8_t* buf, size_t len, SctpPacket* packet,
                         SctpChunk* chunks, size_t maxChunks, size_t* nChunk) {
   if (len < 16) {
