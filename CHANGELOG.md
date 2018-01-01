@@ -1,3 +1,6 @@
+## 0.1.1 (01.01.2018)
+- Fix WuConf uninitialized maxClients parameter.
+
 ## 0.1.0 (30.12.2017)
 - Remove the old default epoll implementation.
 - Split the core logic into a separate library.
