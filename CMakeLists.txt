@@ -123,7 +123,7 @@ if (WITH_NODE)
 
     add_dependencies(node Wu)
 
-    file(COPY examples/webudp.js DESTINATION ${EXAMPLES_DIR})
+    file(COPY examples/EchoServer.js DESTINATION ${EXAMPLES_DIR})
   else()
     message(WARNING "npm not found, skipping Node bindings")
   endif()
