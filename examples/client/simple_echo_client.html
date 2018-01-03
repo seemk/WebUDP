@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebUDP</title>
+  <script src="wusocket.js"></script>
+</head>
+<script>
+
+function Start() {
+  let PORT = 9555;
+  let NUM_PACKETS = 100;
+  let SEND_INTERVAL = 500;
+  let packetNumber = 0;
+
+  let socket = new WuSocket(window.location.protocol + "//" + window.location.hostname + ":" + PORT);
+  socket.onopen = function() {
+    setInterval(function() {
+      let payload = "packet-" + packetNumber;
+      socket.send(payload);
+      packetNumber++
+    }, SEND_INTERVAL);
+  };
+
+  socket.onmessage = function(evt) {
+    let data = evt.data;
+    console.log("received:", data);
+  };
+}
+
+(function() {
+  if (document.readyState != "loading") {
+    Start();
+  } else {
+    document.addEventListener("DOMContentLoaded", Start);
+  }
+})();
+</script>
+<body>
+</body>
+</html>

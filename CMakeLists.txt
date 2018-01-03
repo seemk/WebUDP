@@ -96,6 +96,7 @@ set_target_properties(Wu WuHost EchoServer PROPERTIES
 )
 
 file(MAKE_DIRECTORY ${EXAMPLES_DIR})
+file(COPY examples/client DESTINATION ${EXAMPLES_DIR})
 
 if (WITH_NODE)
   find_program(NPM npm)
