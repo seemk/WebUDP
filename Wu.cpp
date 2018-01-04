@@ -16,6 +16,7 @@
 
 const double kMaxClientTtl = 8.0;
 const double heartbeatInterval = 4.0;
+const int kDefaultMTU = 1400;
 
 static void DefaultErrorCallback(const char*, void*) {}
 static void WriteNothing(const uint8_t*, size_t, const WuClient*, void*) {}
@@ -115,6 +116,7 @@ static void WuClientStart(const Wu* wu, WuClient* client) {
   SSL_set_options(client->ssl, SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
   SSL_set_tmp_ecdh(client->ssl, EC_KEY_new_by_curve_name(NID_X9_62_prime256v1));
   SSL_set_accept_state(client->ssl);
+  SSL_set_mtu(client->ssl, kDefaultMTU);
 }
 
 static void WuSendSctp(const Wu* wu, WuClient* client, const SctpPacket* packet,
@@ -395,10 +397,15 @@ static void WuReceiveDTLSPacket(Wu* wu, const uint8_t* data, size_t length,
   if (!SSL_is_init_finished(client->ssl)) {
     int r = SSL_do_handshake(client->ssl);
 
-    if (r < 0) {
+    if (r <= 0) {
       r = SSL_get_error(client->ssl, r);
       if (SSL_ERROR_WANT_READ == r) {
         WuClientSendPendingDTLS(wu, client);
+      } else if (SSL_ERROR_NONE != r) {
+        char* error = ERR_error_string(r, NULL);
+        if (error) {
+          WuReportError(wu, error);
+        }
       }
     }
   } else {
@@ -507,6 +514,8 @@ static int32_t WuCryptoInit(Wu* wu) {
     ERR_print_errors_fp(stderr);
     return 0;
   }
+
+  SSL_CTX_set_options(wu->sslCtx, SSL_OP_NO_QUERY_MTU);
 
   memcpy(wu->certFingerprint, cert.fingerprint, sizeof(cert.fingerprint));
 
