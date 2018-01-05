@@ -473,11 +473,12 @@ static int32_t WuCryptoInit(Wu* wu) {
     SSL_library_init();
     SSL_load_error_strings();
     ERR_load_BIO_strings();
+    ERR_load_crypto_strings();
     OpenSSL_add_all_algorithms();
     initDone = true;
   }
 
-  wu->sslCtx = SSL_CTX_new(DTLSv1_method());
+  wu->sslCtx = SSL_CTX_new(DTLS_server_method());
   if (!wu->sslCtx) {
     ERR_print_errors_fp(stderr);
     return 0;

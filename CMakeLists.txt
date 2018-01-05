@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.5)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+if (${OPENSSL_VERSION} VERSION_LESS "1.0.2")
+  message(FATAL_ERROR "Invalid OpenSSL version ${OPENSSL_VERSION}, at least 1.0.2 required")
+endif()
+
 option(WITH_NODE "Build Node bindings" OFF)
 option(WITH_TESTS "Build tests" OFF)
 
