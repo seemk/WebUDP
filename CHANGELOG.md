@@ -1,3 +1,6 @@
+## 0.2.0 (12.01.2018)
+- Add DTLS 1.2 support. Requires at least OpenSSL 1.0.2.
+
 ## 0.1.1 (01.01.2018)
 - Fix WuConf uninitialized maxClients parameter.
 
