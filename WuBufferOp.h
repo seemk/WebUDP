@@ -8,11 +8,11 @@ T ByteSwap(T v) {
   if (sizeof(T) == 1) {
     return v;
   } else if (sizeof(T) == 2) {
-    return __builtin_bswap16(v);
+    return __builtin_bswap16(uint16_t(v));
   } else if (sizeof(T) == 4) {
-    return __builtin_bswap32(v);
+    return __builtin_bswap32(uint32_t(v));
   } else if (sizeof(T) == 8) {
-    return __builtin_bswap64(v);
+    return __builtin_bswap64(uint64_t(v));
   } else {
     assert(0);
     return 0;

@@ -1,8 +1,8 @@
 #pragma once
 
+#include <openssl/x509.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <openssl/x509.h>
 
 const size_t kSHA1Length = 20;
 

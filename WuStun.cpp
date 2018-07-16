@@ -4,10 +4,10 @@
 #include "CRC32.h"
 #include "WuCrypto.h"
 
-const size_t kStunHeaderLength = 20;
+const int32_t kStunHeaderLength = 20;
 const int32_t kStunAlignment = 4;
 
-bool ParseStun(const uint8_t* src, size_t len, StunPacket* packet) {
+bool ParseStun(const uint8_t* src, int32_t len, StunPacket* packet) {
   if (len < kStunHeaderLength || src[0] != 0 || src[1] != 1) {
     return false;
   }
@@ -27,7 +27,7 @@ bool ParseStun(const uint8_t* src, size_t len, StunPacket* packet) {
 
   src += ReadScalarSwapped(src, &packet->cookie);
 
-  for (size_t i = 0; i < kStunTransactionIdLength; i++) {
+  for (int32_t i = 0; i < kStunTransactionIdLength; i++) {
     packet->transactionId[i] = src[i];
   }
 
@@ -87,18 +87,18 @@ bool ParseStun(const uint8_t* src, size_t len, StunPacket* packet) {
   return true;
 }
 
-size_t SerializeStunPacket(const StunPacket* packet, const uint8_t* password,
-                           size_t passwordLen, uint8_t* dest, size_t len) {
+int32_t SerializeStunPacket(const StunPacket* packet, const uint8_t* password,
+                            int32_t passwordLen, uint8_t* dest, int32_t len) {
   memset(dest, 0, len);
-  size_t offset = WriteScalar(dest, htons(Stun_SuccessResponse));
+  int32_t offset = WriteScalar(dest, htons(Stun_SuccessResponse));
   // X-MAPPED-ADDRESS (ip4) + MESSAGE-INTEGRITY SHA1
-  uint32_t contentLength = 12 + 24;
-  uint32_t contentLengthIntegrity = contentLength + 8;
-  const size_t contentLengthOffset = offset;
+  int32_t contentLength = 12 + 24;
+  int32_t contentLengthIntegrity = contentLength + 8;
+  const int32_t contentLengthOffset = offset;
   offset += WriteScalar(dest + offset, htons(contentLength));
   offset += WriteScalar(dest + offset, htonl(kStunCookie));
 
-  for (size_t i = 0; i < 12; i++) {
+  for (int32_t i = 0; i < 12; i++) {
     dest[i + offset] = packet->transactionId[i];
   }
 
@@ -117,7 +117,7 @@ size_t SerializeStunPacket(const StunPacket* packet, const uint8_t* password,
   offset += WriteScalar(dest + offset, htons(StunAttrib_MessageIntegrity));
   offset += WriteScalar(dest + offset, htons(20));
 
-  for (size_t i = 0; i < 20; i++) {
+  for (int32_t i = 0; i < 20; i++) {
     dest[i + offset] = digest.bytes[i];
   }
 

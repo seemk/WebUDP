@@ -90,7 +90,7 @@ static const unsigned long crc32Sctp[256] = {
     0xD5CF889D, 0x27A40B9E, 0x79B737BA, 0x8BDCB4B9, 0x988C474D, 0x6AE7C44E,
     0xBE2DA0A5, 0x4C4623A6, 0x5F16D052, 0xAD7D5351};
 
-uint32_t StunCRC32(const void* data, size_t len) {
+uint32_t StunCRC32(const void* data, int32_t len) {
   uint32_t crc = 0xffffffff;
 
   const uint8_t* p = (const uint8_t*)data;
@@ -105,12 +105,12 @@ uint32_t StunCRC32(const void* data, size_t len) {
 
 #define CRC32C(c, d) (c = (c >> 8) ^ (crc32Sctp)[(c ^ (d)) & 0xFF])
 
-uint32_t SctpCRC32(const void* data, size_t len) {
+uint32_t SctpCRC32(const void* data, int32_t len) {
   uint32_t crc = 0xFFFFFFFF;
 
   const uint8_t* p = (const uint8_t*)data;
 
-  for (size_t i = 0; i < len; i++) {
+  for (int32_t i = 0; i < len; i++) {
     CRC32C(crc, p[i]);
   }
 

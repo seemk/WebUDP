@@ -4,7 +4,7 @@
 #include "WuString.h"
 
 const int32_t kMaxStunIdentifierLength = 128;
-const size_t kStunTransactionIdLength = 12;
+const int32_t kStunTransactionIdLength = 12;
 const uint32_t kStunCookie = 0x2112a442;
 const uint16_t kStunXorMagic = 0x2112;
 
@@ -51,7 +51,7 @@ struct StunPacket {
   StunAddress xorMappedAddress;
 };
 
-bool ParseStun(const uint8_t* src, size_t len, StunPacket* packet);
+bool ParseStun(const uint8_t* src, int32_t len, StunPacket* packet);
 
-size_t SerializeStunPacket(const StunPacket* packet, const uint8_t* password,
-                           size_t passwordLen, uint8_t* dest, size_t len);
+int32_t SerializeStunPacket(const StunPacket* packet, const uint8_t* password,
+                            int32_t passwordLen, uint8_t* dest, int32_t len);
