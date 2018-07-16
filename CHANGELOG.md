@@ -1,3 +1,6 @@
+## 0.3.0 (16.07.2018)
+- Fix potential out of bounds read when sending SDP response.
+
 ## 0.2.0 (12.01.2018)
 - Add DTLS 1.2 support. Requires at least OpenSSL 1.0.2.
 
