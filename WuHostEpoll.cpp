@@ -120,21 +120,24 @@ static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
               host->wu, (const char*)conn->requestBuffer + parseStatus,
               contentLength);
 
-          if (sdp.status == WuSDPStatus_MaxClients) {
+          if (sdp.status == WuSDPStatus_Success) {
+            char response[4096];
+            int responseLength =
+                snprintf(response, sizeof(response),
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: application/json\r\n"
+                         "Content-Length: %d\r\n"
+                         "Connection: close\r\n"
+                         "Access-Control-Allow-Origin: *\r\n"
+                         "\r\n%.*s",
+                         sdp.sdpLength, sdp.sdpLength, sdp.sdp);
+            SocketWrite(conn->fd, response, responseLength);
+          } else if (sdp.status == WuSDPStatus_MaxClients) {
             SocketWrite(conn->fd, STRLIT(HTTP_UNAVAILABLE));
           } else if (sdp.status == WuSDPStatus_InvalidSDP) {
             SocketWrite(conn->fd, STRLIT(HTTP_BAD_REQUEST));
           } else {
-            char response[4096];
-            int responseLength = snprintf(response, 4096,
-                                          "HTTP/1.1 200 OK\r\n"
-                                          "Content-Type: application/json\r\n"
-                                          "Content-Length: %d\r\n"
-                                          "Connection: close\r\n"
-                                          "Access-Control-Allow-Origin: *\r\n"
-                                          "\r\n%s",
-                                          sdp.sdpLength, sdp.sdp);
-            SocketWrite(conn->fd, response, responseLength);
+            SocketWrite(conn->fd, STRLIT(HTTP_SERVER_ERROR));
           }
 
           close(conn->fd);

@@ -665,6 +665,11 @@ SDPResult WuExchangeSDP(Wu* wu, const char* sdp, int32_t length) {
       (char*)client->serverUser.identifier, client->serverUser.length,
       (char*)client->serverPassword.identifier, client->serverPassword.length,
       &iceFields, &sdpLength);
+
+  if (!responseSdp) {
+    return {WuSDPStatus_Error, NULL, NULL, 0};
+  }
+
   return {WuSDPStatus_Success, client, responseSdp, sdpLength};
 }
 

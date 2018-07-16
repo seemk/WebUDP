@@ -26,7 +26,8 @@ struct WuEvent {
 enum WuSDPStatus {
   WuSDPStatus_Success,
   WuSDPStatus_InvalidSDP,
-  WuSDPStatus_MaxClients
+  WuSDPStatus_MaxClients,
+  WuSDPStatus_Error
 };
 
 struct SDPResult {
