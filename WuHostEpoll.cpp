@@ -23,36 +23,29 @@ struct WuConnectionBuffer {
   uint8_t requestBuffer[kMaxHttpRequestLength];
 };
 
-struct WuConnectionBufferPool {
-  WuConnectionBufferPool(size_t n)
-      : pool(WuPoolCreate(sizeof(WuConnectionBuffer), n)) {}
-
-  WuConnectionBuffer* GetBuffer() {
-    WuConnectionBuffer* buffer = (WuConnectionBuffer*)WuPoolAcquire(pool);
-    return buffer;
-  }
-
-  void Reclaim(WuConnectionBuffer* buf) {
-    buf->fd = -1;
-    buf->size = 0;
-    WuPoolRelease(pool, buf);
-  }
-
-  WuPool* pool;
-};
-
 struct WuHost {
-  char errBuf[512];
-  WuConnectionBufferPool* bufferPool;
-  uint16_t port;
-  int pollTimeout;
+  Wu* wu;
   int tcpfd;
   int udpfd;
   int epfd;
-  int32_t maxEvents;
+  int pollTimeout;
+  WuPool* bufferPool;
   struct epoll_event* events;
-  Wu* wu;
+  int32_t maxEvents;
+  uint16_t port;
+  char errBuf[512];
 };
+
+static void HostReclaimBuffer(WuHost* host, WuConnectionBuffer* buffer) {
+  buffer->fd = -1;
+  buffer->size = 0;
+  WuPoolRelease(host->bufferPool, buffer);
+}
+
+static WuConnectionBuffer* HostGetBuffer(WuHost* host) {
+  WuConnectionBuffer* buffer = (WuConnectionBuffer*)WuPoolAcquire(host->bufferPool);
+  return buffer;
+}
 
 static void HandleErrno(WuHost* host, const char* description) {
   snprintf(host->errBuf, sizeof(host->errBuf), "%s: %s", description,
@@ -82,12 +75,12 @@ static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
       if (errno != EAGAIN) {
         HandleErrno(host, "failed to read from TCP socket");
         close(conn->fd);
-        host->bufferPool->Reclaim(conn);
+        HostReclaimBuffer(host, conn);
       }
       return;
     } else if (count == 0) {
       close(conn->fd);
-      host->bufferPool->Reclaim(conn);
+      HostReclaimBuffer(host, conn);
       return;
     }
 
@@ -141,20 +134,20 @@ static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
           }
 
           close(conn->fd);
-          host->bufferPool->Reclaim(conn);
+          HostReclaimBuffer(host, conn);
         }
       }
 
       return;
     } else if (parseStatus == -1) {
       close(conn->fd);
-      host->bufferPool->Reclaim(conn);
+      HostReclaimBuffer(host, conn);
       return;
     } else {
       if (conn->size == kMaxHttpRequestLength) {
         SocketWrite(conn->fd, STRLIT(HTTP_BAD_REQUEST));
         close(conn->fd);
-        host->bufferPool->Reclaim(conn);
+        HostReclaimBuffer(host, conn);
         return;
       }
     }
@@ -171,7 +164,6 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
   int n =
       epoll_wait(host->epfd, host->events, host->maxEvents, host->pollTimeout);
 
-  WuConnectionBufferPool* pool = host->bufferPool;
   for (int i = 0; i < n; i++) {
     struct epoll_event* e = &host->events[i];
     WuConnectionBuffer* c = (WuConnectionBuffer*)e->data.ptr;
@@ -179,7 +171,7 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
     if ((e->events & EPOLLERR) || (e->events & EPOLLHUP) ||
         (!(e->events & EPOLLIN))) {
       close(c->fd);
-      pool->Reclaim(c);
+      HostReclaimBuffer(host, c);
       continue;
     }
 
@@ -201,7 +193,7 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
           continue;
         }
 
-        WuConnectionBuffer* conn = pool->GetBuffer();
+        WuConnectionBuffer* conn = HostGetBuffer(host);;
 
         if (conn) {
           conn->fd = infd;
@@ -238,82 +230,106 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
   return 0;
 }
 
-int32_t WuHostInit(WuHost* host, const WuConf* conf) {
-  memset(host, 0, sizeof(WuHost));
+int32_t WuHostCreate(const char* hostAddr, const char* port, int32_t maxClients, WuHost** host) {
+  *host = NULL;
 
-  host->tcpfd = CreateSocket(conf->port, ST_TCP);
+  WuHost* ctx = (WuHost*)calloc(1, sizeof(WuHost));
 
-  if (host->tcpfd == -1) {
-    return 0;
+
+  if (!ctx) {
+    return WU_OUT_OF_MEMORY;
   }
 
-  int s = MakeNonBlocking(host->tcpfd);
-  if (s == -1) {
-    return 0;
+  int32_t status = WuCreate(hostAddr, port, maxClients, &ctx->wu);
+
+  if (status != WU_OK) {
+    free(ctx);
+    return status;
   }
 
-  s = listen(host->tcpfd, SOMAXCONN);
-  if (s == -1) {
-    HandleErrno(host, "tcp listen failed");
-    return 0;
+  ctx->tcpfd = CreateSocket(port, ST_TCP);
+
+  if (ctx->tcpfd == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
-  host->udpfd = CreateSocket(conf->port, ST_UDP);
-
-  if (host->udpfd == -1) {
-    return 0;
+  status = MakeNonBlocking(ctx->tcpfd);
+  if (status == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
-  s = MakeNonBlocking(host->udpfd);
-  if (s == -1) {
-    return 0;
+  status = listen(ctx->tcpfd, SOMAXCONN);
+  if (status == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
-  host->epfd = epoll_create1(0);
-  if (host->epfd == -1) {
-    HandleErrno(host, "epoll_create");
-    return 0;
+  ctx->udpfd = CreateSocket(port, ST_UDP);
+
+  if (ctx->udpfd == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
+  }
+
+  status = MakeNonBlocking(ctx->udpfd);
+  if (status == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
+  }
+
+  ctx->epfd = epoll_create1(0);
+  if (ctx->epfd == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
   const int32_t maxEvents = 128;
+  ctx->bufferPool = WuPoolCreate(sizeof(WuConnectionBuffer), maxEvents + 2);
 
-  host->bufferPool = new WuConnectionBufferPool(maxEvents + 2);
+  if (!ctx->bufferPool) {
+    WuHostDestroy(ctx);
+    return WU_OUT_OF_MEMORY;
+  }
 
-  WuConnectionBuffer* udpBuf = host->bufferPool->GetBuffer();
-  udpBuf->fd = host->udpfd;
+  WuConnectionBuffer* udpBuf = HostGetBuffer(ctx);
+  udpBuf->fd = ctx->udpfd;
 
-  WuConnectionBuffer* tcpBuf = host->bufferPool->GetBuffer();
-  tcpBuf->fd = host->tcpfd;
+  WuConnectionBuffer* tcpBuf = HostGetBuffer(ctx);
+  tcpBuf->fd = ctx->tcpfd;
 
   struct epoll_event event;
   event.data.ptr = tcpBuf;
   event.events = EPOLLIN | EPOLLET;
 
-  s = epoll_ctl(host->epfd, EPOLL_CTL_ADD, host->tcpfd, &event);
-  if (s == -1) {
-    HandleErrno(host, "EPOLL_CTL_ADD tcpfd");
-    return 0;
+  status = epoll_ctl(ctx->epfd, EPOLL_CTL_ADD, ctx->tcpfd, &event);
+  if (status == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
   event.data.ptr = udpBuf;
-  s = epoll_ctl(host->epfd, EPOLL_CTL_ADD, host->udpfd, &event);
-  if (s == -1) {
-    HandleErrno(host, "EPOLL_CTL_ADD udpfd");
-    return 0;
+  status = epoll_ctl(ctx->epfd, EPOLL_CTL_ADD, ctx->udpfd, &event);
+  if (status == -1) {
+    WuHostDestroy(ctx);
+    return WU_ERROR;
   }
 
-  host->maxEvents = maxEvents;
-  host->events = (struct epoll_event*)calloc(host->maxEvents, sizeof(event));
-  host->wu = (Wu*)calloc(1, sizeof(Wu));
+  ctx->maxEvents = maxEvents;
+  ctx->events = (struct epoll_event*)calloc(ctx->maxEvents, sizeof(event));
 
-  if (!WuInit(host->wu, conf)) {
-    return 0;
+  if (!ctx->events) {
+    WuHostDestroy(ctx);
+    return WU_OUT_OF_MEMORY;
   }
 
-  WuSetUserData(host->wu, host);
-  WuSetUDPWriteFunction(host->wu, WriteUDPData);
+  WuSetUserData(ctx->wu, ctx);
+  WuSetUDPWriteFunction(ctx->wu, WriteUDPData);
 
-  return 1;
+  *host = ctx;
+
+  return WU_OK;
 }
 
 void WuHostRemoveClient(WuHost* host, WuClient* client) {
@@ -330,17 +346,34 @@ int32_t WuHostSendBinary(WuHost* host, WuClient* client, const uint8_t* data,
   return WuSendBinary(host->wu, client, data, length);
 }
 
-WuHost* WuHostCreate(const WuConf* conf) {
-  WuHost* host = (WuHost*)calloc(1, sizeof(WuHost));
-
-  if (!WuHostInit(host, conf)) {
-    free(host);
-    return NULL;
-  }
-
-  return host;
-}
-
 void WuHostSetErrorCallback(WuHost* host, WuErrorFn callback) {
   WuSetErrorCallback(host->wu, callback);
+}
+
+void WuHostDestroy(WuHost* host) {
+  if (!host) {
+    return;
+  }
+
+  WuDestroy(host->wu);
+
+  if (host->tcpfd != -1) {
+    close(host->tcpfd);
+  }
+
+  if (host->udpfd != -1) {
+    close(host->udpfd);
+  }
+
+  if (host->epfd != -1) {
+    close(host->epfd);
+  }
+
+  if (host->bufferPool) {
+    free(host->bufferPool);
+  }
+
+  if (host->events) {
+    free(host->events);
+  }
 }

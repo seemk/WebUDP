@@ -4,19 +4,19 @@
 #include "../WuHost.h"
 
 int main(int argc, char** argv) {
-  WuConf conf;
-  memset(&conf, 0, sizeof(conf));
+  const char* hostAddr = "127.0.0.1";
+  const char* port = "9555";
+  int32_t maxClients = 256;
 
   if (argc > 2) {
-    conf.host = argv[1];
-    conf.port = argv[2];
-  } else {
-    conf.host = "127.0.0.1";
-    conf.port = "9555";
+    hostAddr = argv[1];
+    port = argv[2];
   }
 
-  WuHost* host = WuHostCreate(&conf);
-  if (!host) {
+  WuHost* host = NULL;
+
+  int32_t status = WuHostCreate(hostAddr, port, maxClients, &host);
+  if (status != WU_OK) {
     printf("init fail\n");
     return 1;
   }

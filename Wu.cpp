@@ -14,6 +14,28 @@
 #include "WuSdp.h"
 #include "WuStun.h"
 
+struct Wu {
+  WuArena* arena;
+  double time;
+  double dt;
+  char host[256];
+  uint16_t port;
+  WuQueue* pendingEvents;
+  int32_t maxClients;
+  int32_t numClients;
+
+  WuPool* clientPool;
+  WuClient** clients;
+  ssl_ctx_st* sslCtx;
+
+  char certFingerprint[96];
+
+  char errBuf[512];
+  void* userData;
+  WuErrorFn errorCallback;
+  WuWriteFn writeUdpData;
+};
+
 const double kMaxClientTtl = 8.0;
 const double heartbeatInterval = 4.0;
 const int kDefaultMTU = 1400;
@@ -523,31 +545,43 @@ static int32_t WuCryptoInit(Wu* wu) {
   return 1;
 }
 
-int32_t WuInit(Wu* wu, const WuConf* conf) {
-  memset(wu, 0, sizeof(Wu));
-  wu->arena = (WuArena*)calloc(1, sizeof(WuArena));
-  WuArenaInit(wu->arena, 1 << 20);
+int32_t WuCreate(const char* host, const char* port, int maxClients, Wu** wu) {
+  *wu = NULL;
 
-  wu->time = MsNow() * 0.001;
-  wu->dt = 0.0;
-  strncpy(wu->host, conf->host, sizeof(wu->host));
-  wu->port = atoi(conf->port);
-  wu->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
+  Wu* ctx = (Wu*)calloc(1, sizeof(Wu));
 
-  wu->errorCallback = DefaultErrorCallback;
-  wu->writeUdpData = WriteNothing;
-
-  if (!WuCryptoInit(wu)) {
-    WuReportError(wu, "failed to init crypto");
-    return 0;
+  if (!ctx) {
+    return WU_OUT_OF_MEMORY;
   }
 
-  wu->maxClients = conf->maxClients <= 0 ? 256 : conf->maxClients;
-  wu->numClients = 0;
-  wu->clientPool = WuPoolCreate(sizeof(WuClient), wu->maxClients);
-  wu->clients = (WuClient**)calloc(wu->maxClients, sizeof(WuClient*));
+  ctx->arena = (WuArena*)calloc(1, sizeof(WuArena));
 
-  return 1;
+  if (!ctx->arena) {
+    WuDestroy(ctx);
+    return WU_OUT_OF_MEMORY;
+  }
+
+  WuArenaInit(ctx->arena, 1 << 20);
+
+  ctx->time = MsNow() * 0.001;
+  ctx->port = atoi(port);
+  ctx->pendingEvents = WuQueueCreate(sizeof(WuEvent), 1024);
+  ctx->errorCallback = DefaultErrorCallback;
+  ctx->writeUdpData = WriteNothing;
+
+  strncpy(ctx->host, host, sizeof(ctx->host));
+
+  if (!WuCryptoInit(ctx)) {
+    WuDestroy(ctx);
+    return WU_ERROR;
+  }
+
+  ctx->maxClients = maxClients <= 0 ? 256 : maxClients;
+  ctx->clientPool = WuPoolCreate(sizeof(WuClient), ctx->maxClients);
+  ctx->clients = (WuClient**)calloc(ctx->maxClients, sizeof(WuClient*));
+
+  *wu = ctx;
+  return WU_OK;
 }
 
 static void WuSendHeartbeat(Wu* wu, WuClient* client) {
@@ -697,4 +731,12 @@ void WuSetErrorCallback(Wu* wu, WuErrorFn callback) {
   } else {
     wu->errorCallback = DefaultErrorCallback;
   }
+}
+
+void WuDestroy(Wu* wu) { 
+  if (!wu) {
+    return;
+  }
+
+  free(wu);
 }
