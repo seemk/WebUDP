@@ -3,7 +3,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
 extern "C" {
+#endif
 
 #define WU_OK 0
 #define WU_ERROR 1
@@ -15,12 +17,19 @@ typedef void (*WuErrorFn)(const char* err, void* userData);
 typedef void (*WuWriteFn)(const uint8_t* data, size_t length,
                           const WuClient* client, void* userData);
 
-enum WuEventType {
+typedef enum {
   WuEvent_BinaryData,
   WuEvent_ClientJoin,
   WuEvent_ClientLeave,
   WuEvent_TextData
-};
+} WuEventType;
+
+typedef enum {
+  WuSDPStatus_Success,
+  WuSDPStatus_InvalidSDP,
+  WuSDPStatus_MaxClients,
+  WuSDPStatus_Error
+} WuSDPStatus;
 
 typedef struct {
   WuEventType type;
@@ -28,13 +37,6 @@ typedef struct {
   const uint8_t* data;
   int32_t length;
 } WuEvent;
-
-enum WuSDPStatus {
-  WuSDPStatus_Success,
-  WuSDPStatus_InvalidSDP,
-  WuSDPStatus_MaxClients,
-  WuSDPStatus_Error
-};
 
 typedef struct {
   WuSDPStatus status;
@@ -65,4 +67,7 @@ void WuSetUDPWriteFunction(Wu* wu, WuWriteFn write);
 void WuSetUserData(Wu* wu, void* userData);
 void WuSetErrorCallback(Wu* wu, WuErrorFn callback);
 WuAddress WuClientGetAddress(const WuClient* client);
+
+#ifdef __cplusplus
 }
+#endif
