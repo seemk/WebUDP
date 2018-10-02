@@ -1,3 +1,8 @@
+## 0.4.0 (02.10.2018)
+- Add C API.
+- WuHost now has an explicit timeout parameter.
+- Remove ES6 'let' from wusocket.js.
+
 ## 0.3.0 (16.07.2018)
 - Fix potential out of bounds read when sending SDP response.
 
