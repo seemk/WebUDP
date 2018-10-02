@@ -91,7 +91,7 @@ install(EXPORT WuTargets
   DESTINATION lib/cmake/Wu
 )
 
-add_executable(EchoServer examples/EchoServer.cpp)
+add_executable(EchoServer examples/EchoServer.c)
 target_link_libraries(EchoServer WuHost)
 
 set_target_properties(Wu WuHost EchoServer PROPERTIES

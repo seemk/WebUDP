@@ -733,10 +733,22 @@ void WuSetErrorCallback(Wu* wu, WuErrorFn callback) {
   }
 }
 
-void WuDestroy(Wu* wu) { 
+void WuDestroy(Wu* wu) {
   if (!wu) {
     return;
   }
 
   free(wu);
+}
+
+WuClient* WuFindClient(const Wu* wu, WuAddress address) {
+  for (int32_t i = 0; i < wu->numClients; i++) {
+    WuClient* c = wu->clients[i];
+
+    if (c->address.host == address.host && c->address.port == address.port) {
+      return c;
+    }
+  }
+
+  return NULL;
 }

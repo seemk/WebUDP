@@ -154,7 +154,7 @@ static void HandleHttpRequest(WuHost* host, WuConnectionBuffer* conn) {
   }
 }
 
-int32_t WuHostServe(WuHost* host, WuEvent* evt) {
+int32_t WuHostServe(WuHost* host, WuEvent* evt, int timeout) {
   int32_t hres = WuUpdate(host->wu, evt);
 
   if (hres) {
@@ -162,7 +162,7 @@ int32_t WuHostServe(WuHost* host, WuEvent* evt) {
   }
 
   int n =
-      epoll_wait(host->epfd, host->events, host->maxEvents, host->pollTimeout);
+      epoll_wait(host->epfd, host->events, host->maxEvents, timeout);
 
   for (int i = 0; i < n; i++) {
     struct epoll_event* e = &host->events[i];
@@ -376,4 +376,8 @@ void WuHostDestroy(WuHost* host) {
   if (host->events) {
     free(host->events);
   }
+}
+
+WuClient* WuHostFindClient(const WuHost* host, WuAddress address) {
+  return WuFindClient(host->wu, address);
 }

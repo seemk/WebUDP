@@ -10,9 +10,10 @@ var WuSocket = function(address) {
 WuSocket.prototype.send = function(data) {
   if (this.open) {
     this.channel.send(data);
-  } else {
-    console.log("attempt to send in closed state");
+    return true;
   }
+
+  return false;
 };
 
 WuSocket.prototype.close = function() {
@@ -76,13 +77,13 @@ WuSocket.prototype.beginConnection = function() {
   peer.createOffer().then(function(offer) {
     return peer.setLocalDescription(offer);
   }).then(function() {
-    let request = new XMLHttpRequest();
+    var request = new XMLHttpRequest();
     request.open("POST", socket.address);
     request.onload = function() {
       if (request.status == 200) {
-        let response = JSON.parse(request.responseText);
+        var response = JSON.parse(request.responseText);
         peer.setRemoteDescription(new RTCSessionDescription(response.answer)).then(function() {
-          let candidate = new RTCIceCandidate(response.candidate);
+          var candidate = new RTCIceCandidate(response.candidate);
           peer.addIceCandidate(candidate).then(function() {
             console.log("add ice candidate success");
           }).catch(function(err) {

@@ -79,7 +79,9 @@ void WuHostWrap::HandleClientJoin(WuClient* client) {
 
   const int argc = 1;
   v8::Local<v8::Value> argv[argc] = {args};
-  clientJoinCallback.Call(argc, argv);
+
+  Nan::AsyncResource ar("ClientJoin");
+  clientJoinCallback.Call(argc, argv, &ar);
 }
 
 void WuHostWrap::HandleClientLeave(WuClient* client) {
@@ -95,7 +97,9 @@ void WuHostWrap::HandleClientLeave(WuClient* client) {
 
   const int argc = 1;
   v8::Local<v8::Value> argv[argc] = {args};
-  clientLeaveCallback.Call(argc, argv);
+
+  Nan::AsyncResource ar("ClientLeave");
+  clientLeaveCallback.Call(argc, argv, &ar);
 
   WuRemoveClient(host.wu, client);
 }
@@ -118,13 +122,17 @@ void WuHostWrap::HandleContent(const WuEvent* evt) {
     Nan::Set(args, Nan::New("text").ToLocalChecked(),
              Nan::New((const char*)evt->data, evt->length).ToLocalChecked());
     v8::Local<v8::Value> argv[argc] = {args};
-    textDataCallback.Call(argc, argv);
+
+    Nan::AsyncResource ar("TextData");
+    textDataCallback.Call(argc, argv, &ar);
   } else if (evt->type == WuEvent_BinaryData) {
     auto buf = Nan::CopyBuffer((const char*)evt->data, (uint32_t)evt->length)
                    .ToLocalChecked();
     Nan::Set(args, Nan::New("data").ToLocalChecked(), buf);
     v8::Local<v8::Value> argv[argc] = {args};
-    binaryDataCallback.Call(argc, argv);
+
+    Nan::AsyncResource ar("BinaryData");
+    binaryDataCallback.Call(argc, argv, &ar);
   }
 }
 
@@ -146,7 +154,9 @@ void WriteUDPData(const uint8_t* data, size_t length, const WuClient* client,
 
   const int argc = 2;
   v8::Local<v8::Value> argv[argc] = {buf, addr};
-  wrap->udpWriteCallback.Call(argc, argv);
+
+  Nan::AsyncResource ar("UDPWrite");
+  wrap->udpWriteCallback.Call(argc, argv, &ar);
 }
 
 void WuHostWrap::RemoveClient(uint32_t id) {
@@ -196,12 +206,36 @@ NAN_METHOD(WuHostWrap::New) {
     std::string port =
         *v8::String::Utf8Value(Nan::To<v8::String>(info[1]).ToLocalChecked());
 
-    WuConf conf;
-    conf.host = host.c_str();
-    conf.port = port.c_str();
+    int maxClients = 512;
+    if (info.Length() >= 3 && info[2]->IsObject()) {
+      Nan::MaybeLocal<v8::Object> maybeExtraArgs = Nan::To<v8::Object>(info[2]);
 
-    Wu* wu = (Wu*)calloc(1, sizeof(Wu));
-    if (!WuInit(wu, &conf)) {
+      if (!maybeExtraArgs.IsEmpty()) {
+        v8::Local<v8::Object> extraArgs = maybeExtraArgs.ToLocalChecked();
+
+        v8::MaybeLocal<v8::Value> maybeMaxClientsVal =
+            Nan::Get(extraArgs, Nan::New("maxClients").ToLocalChecked());
+
+        if (!maybeMaxClientsVal.IsEmpty() &&
+            maybeMaxClientsVal.ToLocalChecked()->IsNumber()) {
+          Nan::Maybe<int32_t> maybeMaxClients =
+              Nan::To<int32_t>(maybeMaxClientsVal.ToLocalChecked());
+
+          if (maybeMaxClients.IsJust()) {
+            maxClients = maybeMaxClients.FromJust();
+
+            if (maxClients <= 0) {
+              maxClients = 1;
+            }
+          }
+        }
+      }
+    }
+
+    Wu* wu = nullptr;
+    int32_t status = WuCreate(host.c_str(), port.c_str(), maxClients, &wu);
+
+    if (status != WU_OK) {
       Nan::ThrowError("Initialization error");
       return;
     }

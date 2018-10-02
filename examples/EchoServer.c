@@ -17,17 +17,13 @@ int main(int argc, char** argv) {
 
   int32_t status = WuHostCreate(hostAddr, port, maxClients, &host);
   if (status != WU_OK) {
-    printf("init fail\n");
+    printf("failed to create host\n");
     return 1;
   }
 
-  WuHostSetErrorCallback(host, [](const char* err, void*) {
-    printf("error: %s\n", err);
-  });
-
   for (;;) {
     WuEvent evt;
-    while (WuHostServe(host, &evt)) {
+    while (WuHostServe(host, &evt, 0)) {
       switch (evt.type) {
         case WuEvent_ClientJoin: {
           printf("EchoServer: client join\n");
@@ -42,6 +38,10 @@ int main(int argc, char** argv) {
           const char* text = (const char*)evt.data;
           int32_t length = evt.length;
           WuHostSendText(host, evt.client, text, length);
+          break;
+        }
+        case WuEvent_BinaryData: {
+          WuHostSendBinary(host, evt.client, evt.data, evt.length);
           break;
         }
         default:

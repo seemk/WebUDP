@@ -67,6 +67,7 @@ void WuSetUDPWriteFunction(Wu* wu, WuWriteFn write);
 void WuSetUserData(Wu* wu, void* userData);
 void WuSetErrorCallback(Wu* wu, WuErrorFn callback);
 WuAddress WuClientGetAddress(const WuClient* client);
+WuClient* WuFindClient(const Wu* wu, WuAddress address);
 
 #ifdef __cplusplus
 }

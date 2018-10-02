@@ -5,6 +5,7 @@ const dgram = require("dgram");
 
 const HOST = "127.0.0.1";
 const PORT = 9555;
+const MAX_CLIENTS = 512;
 
 /* An example how to use the WebUDP node addon. */
 let app = express();
@@ -12,7 +13,9 @@ app.use(cors());
 app.use(require("body-parser").text());
 
 let udp = dgram.createSocket("udp4");
-let host = new WebUDP.Host(HOST, PORT);
+let host = new WebUDP.Host(HOST, PORT, {
+  maxClients: MAX_CLIENTS
+});
 
 host.setUDPWriteFunction((msg, {port, address}) => {
   udp.send(msg, port, address);
