@@ -3,6 +3,7 @@
 #include <openssl/ec.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
+#include <string.h>
 #include "WuArena.h"
 #include "WuClock.h"
 #include "WuCrypto.h"
