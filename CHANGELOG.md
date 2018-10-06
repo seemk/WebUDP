@@ -1,3 +1,6 @@
+## 0.4.1 (06.10.2018)
+- Fix compilation with g++ 7.
+
 ## 0.4.0 (02.10.2018)
 - Add C API.
 - WuHost now has an explicit timeout parameter.
