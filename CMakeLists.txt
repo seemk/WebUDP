@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.5)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-if (${OPENSSL_VERSION} VERSION_LESS "1.0.2")
-  message(FATAL_ERROR "Invalid OpenSSL version ${OPENSSL_VERSION}, at least 1.0.2 required")
+if (${OPENSSL_VERSION} VERSION_LESS "1.0.2" OR ${OPENSSL_VERSION} VERSION_GREATER_EQUAL "1.1.0")
+  message(FATAL_ERROR "Invalid OpenSSL version ${OPENSSL_VERSION}")
 endif()
 
 option(WITH_NODE "Build Node bindings" OFF)
@@ -106,6 +106,8 @@ if (WITH_NODE)
   find_program(NPM npm)
 
   if (NPM)
+    cmake_policy(SET CMP0070 NEW)
+
     file (GENERATE OUTPUT binding.gyp
       INPUT ${CMAKE_CURRENT_SOURCE_DIR}/binding.gyp.in
     )
