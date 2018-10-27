@@ -1,5 +1,5 @@
 project(WebUdp)
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.7)
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
