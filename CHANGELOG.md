@@ -1,3 +1,8 @@
+## 0.5.0 (27.10.2018)
+- Switch to a newer SDP format.
+  Newer Chrome versions can connect to the server again.
+- Update required CMake version to 3.7.
+
 ## 0.4.1 (06.10.2018)
 - Fix compilation with g++ 7.
 
