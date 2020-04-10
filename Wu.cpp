@@ -90,14 +90,14 @@ struct WuClient {
   StunUserIdentifier remoteUser;
   StunUserIdentifier remoteUserPassword;
   WuAddress address;
-  WuClientState state = WuClient_Dead;
-  uint16_t localSctpPort = 0;
-  uint16_t remoteSctpPort = 0;
-  uint32_t sctpVerificationTag = 0;
-  uint32_t remoteTsn = 0;
-  uint32_t tsn = 1;
-  double ttl = kMaxClientTtl;
-  double nextHeartbeat = heartbeatInterval;
+  WuClientState state;
+  uint16_t localSctpPort;
+  uint16_t remoteSctpPort;
+  uint32_t sctpVerificationTag;
+  uint32_t remoteTsn;
+  uint32_t tsn;
+  double ttl;
+  double nextHeartbeat;
 
   SSL* ssl;
   BIO* inBio;
