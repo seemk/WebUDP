@@ -1,3 +1,8 @@
+## 0.6.0 (10.04.2020)
+- Allow OpenSSL 1.1.
+- Node addon: upgrade nan, now builds with node 12.
+- Fixed compiler warnings.
+
 ## 0.5.0 (27.10.2018)
 - Switch to a newer SDP format.
   Newer Chrome versions can connect to the server again.
