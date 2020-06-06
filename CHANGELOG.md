@@ -1,6 +1,6 @@
 ## 0.6.1 (06.06.2020)
 - Fixed WuHostNull build.
-- Use 2048 bit RSA keys (fixes `SSL_CTX_use_certificate:ee`).
+- Use 2048 bit RSA keys (fixes `SSL_CTX_use_certificate:ee key too small`).
 
 ## 0.6.0 (10.04.2020)
 - Allow OpenSSL 1.1.
