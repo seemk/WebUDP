@@ -1,3 +1,7 @@
+## 0.6.1 (06.06.2020)
+- Fixed WuHostNull build.
+- Use 2048 bit RSA keys (fixes `SSL_CTX_use_certificate:ee`).
+
 ## 0.6.0 (10.04.2020)
 - Allow OpenSSL 1.1.
 - Node addon: upgrade nan, now builds with node 12.
