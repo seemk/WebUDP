@@ -34,6 +34,7 @@ if (UNIX AND NOT APPLE)
     picohttpparser.c
   )
 else ()
+  message(WARNING "Unsupported platform, defaulting to null (no-op) implementation")
   add_library(WuHost
     WuHostNull.cpp
   )
