@@ -22,7 +22,7 @@ WuCert::WuCert() : key(EVP_PKEY_new()), x509(X509_new()) {
     RAND_seed(&seed, sizeof(seed));
   }
 
-  RSA_generate_key_ex(rsa, 1024, n, NULL);
+  RSA_generate_key_ex(rsa, 2048, n, NULL);
   EVP_PKEY_assign_RSA(key, rsa);
 
   BIGNUM* serial = BN_new();
