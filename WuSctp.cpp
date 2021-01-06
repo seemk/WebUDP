@@ -1,5 +1,9 @@
 #include "WuSctp.h"
+#ifdef WIN32
+#include <Winsock2.h>
+#else
 #include <arpa/inet.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 #include "CRC32.h"

@@ -2,6 +2,11 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef WIN32
+#define __builtin_bswap16 _byteswap_ushort 
+#define __builtin_bswap32 _byteswap_ulong 
+#define __builtin_bswap64 _byteswap_uint64 
+#endif
 
 template <typename T>
 T ByteSwap(T v) {
