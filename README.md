@@ -1,9 +1,9 @@
 # WebUDP
 WebRTC datachannel library and server
 
-[Echo server demo](https://www.vektor.space/webudprtt.html) (Chrome, Firefox, Safari 11+)
-
-The library implements a minimal subset of WebRTC to achieve unreliable and out of order UDP transfer for browser clients. The core library (Wu) is platform independent. Refer to WuHostEpoll or WuHostNode for usage.
+The library implements a minimal subset of WebRTC to achieve unreliable and out of order UDP transfer for browser clients.
+See the [echo server example](https://github.com/seemk/WebUDP/blob/master/examples) for how to connect to the server from a browser.
+The core library (Wu) is platform independent. Refer to WuHostEpoll or WuHostNode for platform-specific usage.
 
 ## Building
 ```bash
