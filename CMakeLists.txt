@@ -37,6 +37,9 @@ else ()
   message(WARNING "Unsupported platform, defaulting to null (no-op) implementation")
   add_library(WuHost
     WuHostNull.cpp
+    wepoll.c
+    wepoll.h
+    picohttpparser.c
   )
 endif()
 
@@ -58,6 +61,13 @@ target_link_libraries(Wu
   PRIVATE OpenSSL::Crypto
   PRIVATE Threads::Threads
 )
+
+if (MSVC)
+  target_link_libraries(Wu
+    PRIVATE WS2_32.lib
+    PRIVATE Crypt32.lib
+  )
+endif()
 
 target_link_libraries(WuHost Wu)
 

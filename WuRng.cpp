@@ -1,5 +1,9 @@
 #include "WuRng.h"
+#ifdef WIN32
+#include <intrin.h>
+#else
 #include <x86intrin.h>
+#endif
 
 static const char kCharacterTable[] =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
