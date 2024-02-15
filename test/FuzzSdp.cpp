@@ -7,18 +7,17 @@ int main(int argc, char** argv) {
   size_t length = 0;
   uint8_t* content = LoadFile(argv[1], &length);
 
-  Wu wu;
+  Wu* wu = nullptr;
+  const char* host = "127.0.0.1";
+  const char*  port = "5000";
+  int maxClients = 256;
 
-  WuConf conf;
-  conf.host = "127.0.0.1";
-  conf.port = "5000";
-
-  if (!WuInit(&wu, &conf)) {
+  if (!WuCreate(host, port, maxClients, &wu)) {
     return 0;
   }
 
   if (content) {
-    WuExchangeSDP(&wu, (const char*)content, length);
+    WuExchangeSDP(wu, (const char*)content, length);
   }
 
   return 0;
