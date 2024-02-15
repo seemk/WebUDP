@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
   Wu* wu = nullptr;
   const char* host = "127.0.0.1";
   const char*  port = "5000";
-  int maxClients = 256;
+  int32_t maxClients = 256;
 
   if (!WuCreate(host, port, maxClients, &wu)) {
     return 0;
